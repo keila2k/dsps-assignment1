@@ -1,14 +1,17 @@
-
-
-import com.amazonaws.services.applicationdiscovery.model.Tag;
-import org.apache.commons.lang3.math.NumberUtils;
+import org.apache.log4j.BasicConfigurator;
+import software.amazon.awssdk.services.ec2.model.Instance;
 
 import java.util.ArrayList;
 import java.util.List;
 
 public class LocalApplication {
     public static void main(String[] args) throws Exception {
-        List<String> fileNames = new ArrayList<String>();
+        BasicConfigurator.configure();
+
+        AWSHandler.EC2EstablishConnection();
+        List<Instance> instances = AWSHandler.EC2CreateInstance("manager", 1, "file1", null, null);
+
+        /*List<String> fileNames = new ArrayList<String>();
         List<String> inputFiles = new ArrayList<String>();
         List<String> outputFiles = new ArrayList<String>();
         Integer workersFilesRatio = 0;
@@ -36,7 +39,7 @@ public class LocalApplication {
                 .resources(instance_id)
                 .tags(tag)
                 .build();
-
+*/
 
     }
 }
