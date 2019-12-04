@@ -1,4 +1,5 @@
 import org.apache.log4j.BasicConfigurator;
+import org.apache.log4j.Level;
 import software.amazon.awssdk.services.ec2.model.Instance;
 
 import java.util.ArrayList;
@@ -7,6 +8,7 @@ import java.util.List;
 public class LocalApplication {
     public static void main(String[] args) throws Exception {
         BasicConfigurator.configure();
+        org.apache.log4j.Logger.getRootLogger().setLevel(Level.INFO);
 
         AWSHandler.EC2EstablishConnection();
         List<Instance> instances = AWSHandler.EC2CreateInstance("manager", 1, "file1", null, null);
