@@ -1,20 +1,18 @@
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.ec2.Ec2Client;
-import software.amazon.awssdk.services.ec2.model.*;
 import software.amazon.awssdk.services.ec2.model.Tag;
+import software.amazon.awssdk.services.ec2.model.*;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.*;
-import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.*;
-
 
 import java.io.File;
 import java.net.URL;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 
@@ -158,14 +156,29 @@ public class AWSHandler {
         PutObjectRequest putObjectRequest = PutObjectRequest.builder().bucket(bucketName).key(toUpload.getName()).build();
         s3.putObject(putObjectRequest, RequestBody.fromFile(toUpload));
         logger.info("Finished uploading file {}", toUpload.getName());
-
-
     }
 
     public static void s3UploadFiles(String bucketName, List<String> inputFiles) {
         logger.info("Beginning uploading input files: {}", inputFiles.toString());
         inputFiles.stream().forEach(file -> s3Upload(bucketName, getFileFromResources(file)));
         logger.info("Finished uploading input files: {}", inputFiles.toString());
+
+    }
+
+    public static void s3Download(String bucketName, String key, File downloadTo) {
+        logger.info("Beginning downloading file {}", key);
+        GetObjectRequest getObjectRequest = GetObjectRequest.builder().bucket(bucketName).key(key).build();
+        s3.getObject(getObjectRequest, downloadTo.toPath());
+        logger.info("Finished download file {}", key);
+    }
+
+    public static void s3DownloadFiles(String bucketName, List<String> keys, String path) {
+        logger.info("Beginning downloading input files: {}", keys.toString());
+        keys.forEach(key -> {
+            File newFile = new File(path + key);
+            s3Download(bucketName, key, newFile);
+        });
+        logger.info("Finished downloading input files: {}", keys.toString());
 
     }
 

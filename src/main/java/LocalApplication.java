@@ -1,3 +1,6 @@
+import com.google.gson.Gson;
+import com.google.gson.JsonElement;
+import com.sun.org.apache.xalan.internal.xsltc.compiler.util.Type;
 import org.apache.commons.lang.math.NumberUtils;
 import org.apache.log4j.BasicConfigurator;
 import org.apache.log4j.Level;
@@ -7,10 +10,8 @@ import software.amazon.awssdk.services.ec2.model.Instance;
 import software.amazon.awssdk.services.sqs.model.Message;
 import software.amazon.awssdk.services.sqs.model.QueueDoesNotExistException;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
-import java.io.IOException;
+
+import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -20,6 +21,7 @@ public class LocalApplication {
     public static final String MANAGER_QUEUE = "managerQueue";
     public static final String APPLICATION_QUEUE = "applicationQueue";
     private static final Logger logger = LoggerFactory.getLogger(AWSHandler.class);
+    static String bucketName;
     static List<String> fileNames = new ArrayList<String>();
     static List<String> inputFiles = new ArrayList<String>();
     static List<String> outputFiles = new ArrayList<String>();
@@ -30,14 +32,26 @@ public class LocalApplication {
     static List<Instance> instances;
 
     public static void main(String[] args) throws Exception {
-        configureLogger();
+        test();
+//        configureLogger();
 //        handleEC2();
 //        handleS3AndFiles(args);
-        AWSHandler.sqsEstablishConnection();
+//        AWSHandler.sqsEstablishConnection();
 //        managerQueueUrl = startSqs(MANAGER_QUEUE);
-        applicationQueueUrl = startSqs(APPLICATION_QUEUE);
+//        applicationQueueUrl = startSqs(APPLICATION_QUEUE);
 //        sendMessageToSqs(managerQueueUrl, inputFiles.get(0));
-        startPollingFromSqs();
+//        startPollingFromSqs();
+//        downloadFilesFromS3();
+    }
+
+    private static void test() {
+        Gson gson = new Gson();
+        JsonElement name = gson.fromJson("{name: string}", JsonElement.class);
+        System.out.println(name);
+    }
+
+    private static void downloadFilesFromS3() {
+        AWSHandler.s3DownloadFiles(bucketName, inputFiles, "./output/");
     }
 
     private static Message startPollingFromSqs() {
@@ -69,7 +83,7 @@ public class LocalApplication {
 
     private static void handleS3AndFiles(String[] args) {
         AWSHandler.s3EstablishConnection();
-        String bucketName = AWSHandler.s3GenerateBucketName("ori-shay");
+        bucketName = AWSHandler.s3GenerateBucketName("ori-shay");
         AWSHandler.s3CreateBucket(bucketName);
         workersFilesRatio = 0;
         isTerminate = false;
