@@ -2,6 +2,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.ec2.Ec2Client;
 import software.amazon.awssdk.services.ec2.model.*;
+import software.amazon.awssdk.services.ec2.model.Tag;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.*;
+import software.amazon.awssdk.regions.Region;
+
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -16,15 +21,17 @@ public class AWSHandler {
     private static final String SECURITY_GROUP = "launch-wizard-1";
     private static final Logger logger = LoggerFactory.getLogger(AWSHandler.class);
     private static Ec2Client ec2;
-    public static Boolean isBentzi = true;
-//    private static AmazonS3 s3;
+    public static Boolean isBentzi = false;
+    private static S3Client s3;
+    private static Region region = Region.US_EAST_1;
+
 //    private static AmazonSQS sqs;
 
-    public static void EC2EstablishConnection() {
+    public static void ec2EstablishConnection() {
         ec2 = Ec2Client.create();
     }
 
-    public static List<Instance> EC2isInstanceRunning(String instanceName) {
+    public static List<Instance> ec2IsInstanceRunning(String instanceName) {
 
         List<Reservation> reservList = ec2.describeInstances().reservations();
 
@@ -46,9 +53,9 @@ public class AWSHandler {
         return null;
     }
 
-    public static List<Instance> EC2CreateInstance(String instanceName, Integer numOfInstance, String fileToRun, String bucketName, String[] args) {
-        List<Instance> instances = EC2isInstanceRunning(instanceName);
-        if  (instances != null) {
+    public static List<Instance> ec2CreateInstance(String instanceName, Integer numOfInstance, String fileToRun, String bucketName, String[] args) {
+        List<Instance> instances = ec2IsInstanceRunning(instanceName);
+        if (instances != null) {
             logger.info("Found an EC2 running instance, not creating a new one");
             return instances;
         }
@@ -90,18 +97,57 @@ public class AWSHandler {
         return runInstancesResponse.instances();
     }
 
-//
-//    public static void S3EstablishConnection() {
-//        s3 = AmazonS3ClientBuilder.standard()
-//                .withRegion(Regions.US_EAST_1)
-//                .build();
-//    }
-//
-//    public static void createBucket(String bucketName){
-//
-//        s3.createBucket(bucketName);
-//
-//    }
+    public static void s3EstablishConnection() {
+        s3 = S3Client.builder().region(region).build();
+    }
+
+
+    public static CreateBucketResponse s3CreateBucket(String bucketName) {
+
+        // Create bucket
+        CreateBucketRequest createBucketRequest = CreateBucketRequest
+                .builder()
+                .bucket(bucketName)
+                .build();
+        CreateBucketResponse createdBucket = s3.createBucket(createBucketRequest);
+        logger.info("Bucket created");
+        logger.info("Bucket Name: {}", bucketName);
+        return createdBucket;
+    }
+
+    public static String s3GenerateBucketName(String name) {
+        return name + '-' + System.currentTimeMillis();
+    }
+
+    public static void s3DeleteBucket(String bucketName) {
+        s3DeleteBucketContent(bucketName);
+        s3DeleteEmptyBucket(bucketName);
+    }
+
+    private static void s3DeleteBucketContent(String bucketName) {
+        ListObjectsV2Request listObjectsV2Request = ListObjectsV2Request.builder().bucket(bucketName).build();
+        ListObjectsV2Response listObjectsV2Response;
+        do {
+            listObjectsV2Response = s3.listObjectsV2(listObjectsV2Request);
+            for (S3Object s3Object : listObjectsV2Response.contents()) {
+                s3.deleteObject(DeleteObjectRequest.builder().bucket(bucketName).key(s3Object.key()).build());
+            }
+
+            listObjectsV2Request = ListObjectsV2Request.builder().bucket(bucketName)
+                    .continuationToken(listObjectsV2Response.nextContinuationToken())
+                    .build();
+
+        } while (listObjectsV2Response.isTruncated());
+
+    }
+
+    private static void s3DeleteEmptyBucket(String bucket) {
+        // Delete empty bucket
+        DeleteBucketRequest deleteBucketRequest = DeleteBucketRequest.builder().bucket(bucket).build();
+        s3.deleteBucket(deleteBucketRequest);
+    }
+
+
 //    public static void deleteBucket(String bucketName){
 //
 //        s3.deleteBucket(bucketName);
