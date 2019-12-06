@@ -7,11 +7,14 @@ import software.amazon.awssdk.services.ec2.model.Tag;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.*;
 import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.*;
 
 
 import java.io.File;
 import java.net.URL;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 
@@ -27,8 +30,8 @@ public class AWSHandler {
     public static Boolean isBentzi = false;
     private static S3Client s3;
     private static Region region = Region.US_EAST_1;
+    private static SqsClient sqs;
 
-//    private static AmazonSQS sqs;
 
     public static void ec2EstablishConnection() {
         ec2 = Ec2Client.create();
@@ -178,6 +181,51 @@ public class AWSHandler {
         }
 
     }
+
+
+    public static void sqsEstablishConnection() {
+        sqs = SqsClient.builder().region(region).build();
+    }
+
+    public static String sqsGetQueueUrl(String queueName) {
+        GetQueueUrlResponse getQueueUrlResponse =
+                sqs.getQueueUrl(GetQueueUrlRequest.builder().queueName(queueName).build());
+        return getQueueUrlResponse.queueUrl();
+    }
+
+    public static String sqsCreateQueue(String queueName) {
+        CreateQueueRequest createQueueRequest = CreateQueueRequest.builder().queueName(queueName).build();
+        sqs.createQueue(createQueueRequest);
+        String queueUrl = sqsGetQueueUrl(queueName);
+        logger.info("New queue created {}, {}", queueName, queueUrl);
+        return queueUrl;
+    }
+
+    public static void sendMessageToSqs(String queueUrl, String message) {
+        sqs.sendMessage(SendMessageRequest.builder()
+                .queueUrl(queueUrl)
+                .messageBody(message)
+                .build());
+    }
+
+    public static List<Message> receiveMessageFromSqs(String queueUrl, int timeout) {
+        ReceiveMessageRequest receiveMessageRequest = ReceiveMessageRequest.builder()
+                .queueUrl(queueUrl)
+                .maxNumberOfMessages(5)
+                .waitTimeSeconds(timeout)
+                .build();
+        return sqs.receiveMessage(receiveMessageRequest).messages();
+    }
+
+    public static void deleteMessageFromSqs(String queueUrl, Message message) {
+        DeleteMessageRequest deleteMessageRequest = DeleteMessageRequest.builder()
+                .queueUrl(queueUrl)
+                .receiptHandle(message.receiptHandle())
+                .build();
+        sqs.deleteMessage(deleteMessageRequest);
+        logger.info("Message {} deleted from {}", message.body(), queueUrl);
+    }
+
 
 //    public static void deleteBucket(String bucketName){
 //
