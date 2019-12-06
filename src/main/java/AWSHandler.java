@@ -1,5 +1,6 @@
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.ec2.Ec2Client;
 import software.amazon.awssdk.services.ec2.model.*;
 import software.amazon.awssdk.services.ec2.model.Tag;
@@ -8,6 +9,8 @@ import software.amazon.awssdk.services.s3.model.*;
 import software.amazon.awssdk.regions.Region;
 
 
+import java.io.File;
+import java.net.URL;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -147,6 +150,34 @@ public class AWSHandler {
         s3.deleteBucket(deleteBucketRequest);
     }
 
+    public static void s3Upload(String bucketName, File toUpload) {
+        logger.info("Beginning uploading file {}", toUpload.getName());
+        PutObjectRequest putObjectRequest = PutObjectRequest.builder().bucket(bucketName).key(toUpload.getName()).build();
+        s3.putObject(putObjectRequest, RequestBody.fromFile(toUpload));
+        logger.info("Finished uploading file {}", toUpload.getName());
+
+
+    }
+
+    public static void s3UploadFiles(String bucketName, List<String> inputFiles) {
+        logger.info("Beginning uploading input files: {}", inputFiles.toString());
+        inputFiles.stream().forEach(file -> s3Upload(bucketName, getFileFromResources(file)));
+        logger.info("Finished uploading input files: {}", inputFiles.toString());
+
+    }
+
+    private static File getFileFromResources(String fileName) {
+
+        ClassLoader classLoader = LocalApplication.class.getClassLoader();
+
+        URL resource = classLoader.getResource(fileName);
+        if (resource == null) {
+            throw new IllegalArgumentException("file is not found!");
+        } else {
+            return new File(resource.getFile());
+        }
+
+    }
 
 //    public static void deleteBucket(String bucketName){
 //
