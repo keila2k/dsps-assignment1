@@ -9,13 +9,19 @@ import org.slf4j.LoggerFactory;
 
 public class Manager {
     private static final Logger logger = LoggerFactory.getLogger(AWSHandler.class);
-    static Gson gson = new Gson();
+    static String applicationQueueUrl;
+    static String managerQueueUrl;
+    static String bucketName;
 
     public static void main(String[] args) {
         configureLogger();
-
         Options options = new Options();
+        parseProgramArgs(args, options);
+        AWSHandler.sqsEstablishConnection();
+        AWSHandler.sendMessageToSqs(applicationQueueUrl, "{type: DONE}", true);
+    }
 
+    private static void parseProgramArgs(String[] args, Options options) {
         Option appQ = new Option("appQ", true, "application q url");
         appQ.setRequired(true);
         options.addOption(appQ);
@@ -41,16 +47,13 @@ public class Manager {
             System.exit(1);
         }
 
-        String appQUrl = cmd.getOptionValue("appQ");
-        String managerQUrl = cmd.getOptionValue("managerQ");
-        String bucketName = cmd.getOptionValue("bucket");
+        applicationQueueUrl = cmd.getOptionValue("appQ");
+        managerQueueUrl = cmd.getOptionValue("managerQ");
+        bucketName = cmd.getOptionValue("bucket");
 
-
-        AWSHandler.sqsEstablishConnection();
-        logger.info("appQUrl {}", appQUrl);
-        logger.info("managerQUrl {}", managerQUrl);
+        logger.info("appQUrl {}", applicationQueueUrl);
+        logger.info("managerQUrl {}", managerQueueUrl);
         logger.info("bucketName {}", bucketName);
-        AWSHandler.sendMessageToSqs(appQUrl, "{type: DONE}", true);
     }
 
     private static void configureLogger() {
