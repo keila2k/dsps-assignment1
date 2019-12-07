@@ -1,5 +1,6 @@
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.sun.org.apache.xalan.internal.xsltc.compiler.util.Type;
 import org.apache.commons.lang.math.NumberUtils;
 import org.apache.log4j.BasicConfigurator;
@@ -30,25 +31,22 @@ public class LocalApplication {
     static String managerQueueUrl;
     static String applicationQueueUrl;
     static List<Instance> instances;
+    static Gson gson = new Gson();
+
 
     public static void main(String[] args) throws Exception {
-        test();
-//        configureLogger();
+//        test();
+        configureLogger();
 //        handleEC2();
 //        handleS3AndFiles(args);
-//        AWSHandler.sqsEstablishConnection();
+        AWSHandler.sqsEstablishConnection();
 //        managerQueueUrl = startSqs(MANAGER_QUEUE);
-//        applicationQueueUrl = startSqs(APPLICATION_QUEUE);
+        applicationQueueUrl = startSqs(APPLICATION_QUEUE);
 //        sendMessageToSqs(managerQueueUrl, inputFiles.get(0));
-//        startPollingFromSqs();
+        startPollingFromSqs();
 //        downloadFilesFromS3();
     }
 
-    private static void test() {
-        Gson gson = new Gson();
-        JsonElement name = gson.fromJson("{name: string}", JsonElement.class);
-        System.out.println(name);
-    }
 
     private static void downloadFilesFromS3() {
         AWSHandler.s3DownloadFiles(bucketName, inputFiles, "./output/");
@@ -58,7 +56,10 @@ public class LocalApplication {
         Message doneMessage;
         do {
             List<Message> messages = AWSHandler.receiveMessageFromSqs(applicationQueueUrl, 5);
-            doneMessage = messages.stream().filter(message -> message.body().equals("DONE")).findAny().orElse(null);
+            doneMessage = messages.stream().filter(message -> {
+                JsonObject messageBody = gson.fromJson(message.body(), JsonElement.class).getAsJsonObject();
+                return messageBody.get("type").getAsString().equals("DONE");
+            }).findAny().orElse(null);
         } while (doneMessage == null);
         AWSHandler.deleteMessageFromSqs(applicationQueueUrl, doneMessage);
         return doneMessage;
