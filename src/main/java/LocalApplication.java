@@ -24,8 +24,8 @@ public class LocalApplication {
     static List<String> fileNames = new ArrayList<String>();
     static List<String> inputFiles = new ArrayList<String>();
     static List<String> outputFiles = new ArrayList<String>();
-    static Integer workersFilesRatio;
-    static Boolean isTerminate;
+    static Integer workersFilesRatio = 0;
+    static Boolean isTerminate = false;
     static String managerQueueUrl;
     static String applicationQueueUrl;
     static List<Instance> instances;
@@ -34,7 +34,8 @@ public class LocalApplication {
 
     public static void main(String[] args) throws Exception {
         configureLogger();
-        handleS3AndFiles(args);
+        extractArgs(args);
+        handleS3AndUploadInputFiles();
         AWSHandler.sqsEstablishConnection();
         managerQueueUrl = startSqs(MANAGER_QUEUE, false);
         applicationQueueUrl = startSqs(APPLICATION_QUEUE, true);
@@ -79,13 +80,14 @@ public class LocalApplication {
         return queueUrl;
     }
 
-    private static void handleS3AndFiles(String[] args) {
+    private static void handleS3AndUploadInputFiles() {
         AWSHandler.s3EstablishConnection();
         bucketName = AWSHandler.s3GenerateBucketName("ori-shay");
         AWSHandler.s3CreateBucket(bucketName);
-        workersFilesRatio = 0;
-        isTerminate = false;
+        AWSHandler.s3UploadFiles(bucketName, inputFiles);
+    }
 
+    private static void extractArgs(String[] args) {
         for (String arg : args) {
             if (!NumberUtils.isNumber(arg)) {
                 if (arg.equals("terminate")) isTerminate = true;
@@ -97,8 +99,6 @@ public class LocalApplication {
         outputFiles.addAll(fileNames.subList(fileNames.size() / 2, fileNames.size()));
 
         inputFiles.add("dsps-assignment1.jar");
-        AWSHandler.s3UploadFiles(bucketName, inputFiles);
-
     }
 
     private static void handleEC2() {
