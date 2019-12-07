@@ -3,10 +3,5 @@
 
 # Project exclude paths
 /.
-
-/.idea/codeStyles/codeStyleConfig.xml
-/.idea/misc.xml
-/.idea/sbt.xml
-/.idea/vcs.xml
-/.idea/workspace.xml
-/.idea/aws.xml
+/target/
+/.idea/
