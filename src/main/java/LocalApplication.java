@@ -1,7 +1,6 @@
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.sun.org.apache.xalan.internal.xsltc.compiler.util.Type;
 import org.apache.commons.lang.math.NumberUtils;
 import org.apache.log4j.BasicConfigurator;
 import org.apache.log4j.Level;
@@ -15,12 +14,11 @@ import software.amazon.awssdk.services.sqs.model.QueueDoesNotExistException;
 import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 
 public class LocalApplication {
     public static final String MANAGER_QUEUE = "managerQueue";
-    public static final String APPLICATION_QUEUE = "applicationQueue";
+    public static final String APPLICATION_QUEUE = "applicationQueue.fifo";
     private static final Logger logger = LoggerFactory.getLogger(AWSHandler.class);
     static String bucketName;
     static List<String> fileNames = new ArrayList<String>();
@@ -35,14 +33,13 @@ public class LocalApplication {
 
 
     public static void main(String[] args) throws Exception {
-//        test();
         configureLogger();
-//        handleEC2();
-//        handleS3AndFiles(args);
+        handleS3AndFiles(args);
         AWSHandler.sqsEstablishConnection();
-//        managerQueueUrl = startSqs(MANAGER_QUEUE);
-        applicationQueueUrl = startSqs(APPLICATION_QUEUE);
-//        sendMessageToSqs(managerQueueUrl, inputFiles.get(0));
+        managerQueueUrl = startSqs(MANAGER_QUEUE, false);
+        applicationQueueUrl = startSqs(APPLICATION_QUEUE, true);
+        handleEC2();
+//        sendMessageToSqs(managerQueueUrl, inputFiles.get(0), false);
         startPollingFromSqs();
 //        downloadFilesFromS3();
     }
@@ -65,18 +62,18 @@ public class LocalApplication {
         return doneMessage;
     }
 
-    private static void sendMessageToSqs(String queueUrl, String message) {
-        AWSHandler.sendMessageToSqs(queueUrl, message);
+    private static void sendMessageToSqs(String queueUrl, String message, Boolean isFifo) {
+        AWSHandler.sendMessageToSqs(queueUrl, message, isFifo);
     }
 
-    private static String startSqs(String queueName) {
+    private static String startSqs(String queueName, Boolean isFifo) {
 
         String queueUrl;
         try {
             queueUrl = AWSHandler.sqsGetQueueUrl(queueName);
             logger.info("{} queue is already running on {}", queueName, queueUrl);
         } catch (QueueDoesNotExistException e) {
-            queueUrl = AWSHandler.sqsCreateQueue(queueName);
+            queueUrl = AWSHandler.sqsCreateQueue(queueName, isFifo);
             logger.info("{} queue created on {}", queueName, queueUrl);
         }
         return queueUrl;
@@ -99,12 +96,18 @@ public class LocalApplication {
         inputFiles.addAll(fileNames.subList(0, fileNames.size() / 2));
         outputFiles.addAll(fileNames.subList(fileNames.size() / 2, fileNames.size()));
 
+        inputFiles.add("dsps-assignment1.jar");
         AWSHandler.s3UploadFiles(bucketName, inputFiles);
+
     }
 
     private static void handleEC2() {
         AWSHandler.ec2EstablishConnection();
-        instances = AWSHandler.ec2CreateInstance("manager", 1, "file1", null, null);
+        List<String> args = new ArrayList<>();
+        args.add("-appQ " + applicationQueueUrl);
+        args.add("-managerQ " + managerQueueUrl);
+        args.add("-bucket " + bucketName);
+        instances = AWSHandler.ec2CreateInstance("manager", 1, "dsps-assignment1.jar", bucketName, args);
     }
 
     private static void configureLogger() {

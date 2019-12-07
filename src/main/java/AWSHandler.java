@@ -1,3 +1,5 @@
+import com.sun.org.apache.xpath.internal.operations.Bool;
+import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.core.sync.RequestBody;
@@ -12,12 +14,12 @@ import software.amazon.awssdk.services.sqs.model.*;
 
 import java.io.File;
 import java.net.URL;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 
 public class AWSHandler {
-    private static final String AMI_ID = "ami-00eb20669e0990cb4";
+    private static final String AMI_ID = "ami-00068cd7555f543d5";
     private static final String ORI_KEY_PAIR = "AWS_key1";
     private static final String BENTZI_KEY_PAIR = "dsps";
     private static final String ORI_ROLE = "arn:aws:iam::049413562759:instance-profile/admin";
@@ -57,7 +59,7 @@ public class AWSHandler {
         return null;
     }
 
-    public static List<Instance> ec2CreateInstance(String instanceName, Integer numOfInstance, String fileToRun, String bucketName, String[] args) {
+    public static List<Instance> ec2CreateInstance(String instanceName, Integer numOfInstance, String fileToRun, String bucketName, List<String> args) {
         List<Instance> instances = ec2IsInstanceRunning(instanceName);
         if (instances != null) {
             logger.info("Found an EC2 running instance, not creating a new one");
@@ -71,7 +73,7 @@ public class AWSHandler {
                 .iamInstanceProfile(IamInstanceProfileSpecification.builder().arn(isBentzi ? BENTZI_ROLE : ORI_ROLE).build())
                 .securityGroups(SECURITY_GROUP)
                 .keyName(isBentzi ? BENTZI_KEY_PAIR : ORI_KEY_PAIR)
-                .userData("ori")
+                .userData(generateExecutionScript(bucketName, fileToRun, args))
                 .build();
 
 
@@ -91,7 +93,7 @@ public class AWSHandler {
             ec2.createTags(createTagsRequest);
 
             logger.info(
-                    "Successfully started EC2 instance %s based on AMI %s",
+                    "Successfully started EC2 instance {} based on AMI {}",
                     instance_id, AMI_ID);
         } catch (Ec2Exception e) {
             logger.error(e.getMessage());
@@ -206,19 +208,35 @@ public class AWSHandler {
         return getQueueUrlResponse.queueUrl();
     }
 
-    public static String sqsCreateQueue(String queueName) {
-        CreateQueueRequest createQueueRequest = CreateQueueRequest.builder().queueName(queueName).build();
+    public static String sqsCreateQueue(String queueName, Boolean isFifo) {
+        Map<QueueAttributeName, String> attributes = new HashMap<>();
+        if (isFifo) {
+            attributes.put(QueueAttributeName.FIFO_QUEUE, isFifo.toString());
+            attributes.put(QueueAttributeName.CONTENT_BASED_DEDUPLICATION, isFifo.toString());
+        }
+        CreateQueueRequest createQueueRequest = CreateQueueRequest.builder().queueName(queueName).attributes(attributes)
+                .build();
         sqs.createQueue(createQueueRequest);
         String queueUrl = sqsGetQueueUrl(queueName);
         logger.info("New queue created {}, {}", queueName, queueUrl);
         return queueUrl;
     }
 
-    public static void sendMessageToSqs(String queueUrl, String message) {
-        sqs.sendMessage(SendMessageRequest.builder()
-                .queueUrl(queueUrl)
-                .messageBody(message)
-                .build());
+    public static void sendMessageToSqs(String queueUrl, String message, Boolean isFifo) {
+        SendMessageRequest sendMessageRequest;
+        if (isFifo) {
+            sendMessageRequest = SendMessageRequest.builder()
+                    .queueUrl(queueUrl)
+                    .messageBody(message)
+                    .messageGroupId("group1")
+                    .build();
+        } else {
+            sendMessageRequest = SendMessageRequest.builder()
+                    .queueUrl(queueUrl)
+                    .messageBody(message)
+                    .build();
+        }
+        sqs.sendMessage(sendMessageRequest);
     }
 
     public static List<Message> receiveMessageFromSqs(String queueUrl, int timeout) {
@@ -240,7 +258,7 @@ public class AWSHandler {
     }
 
 
-//    public static void deleteBucket(String bucketName){
+    //    public static void deleteBucket(String bucketName){
 //
 //        s3.deleteBucket(bucketName);
 //
@@ -345,27 +363,26 @@ public class AWSHandler {
 //        ec2.terminateInstances(request);
 //    }
 //
-//    private static String getUserDataScript(String jarFileName, String bucketName, String[] args){
-//        ArrayList<String> lines = new ArrayList<String>();
-//        lines.add("#! /bin/bash");
-//        lines.add("aws s3 cp s3://"+bucketName+"/"+jarFileName+" "+jarFileName);
-//        String jarCommand = "java -jar "+jarFileName;
-//
-//        // if there are args this is data script of worker
-//        if(args!=null){
-//            //copy tessdata to worker instance
-//            //   lines.add("aws s3 cp s3://"+bucketName+"/tessdata .");
-//            //   lines.add("apt-get install tesseract-ocr");
-//
-//            // add args
-//            for (int i = 0; i < args.length; i++) {
-//                jarCommand+=" "+args[i];
-//            }
-//        }
-//        lines.add(jarCommand);
-//        String str = new String(Base64.encodeBase64(join(lines, "\n").getBytes()));
-//        return str;
-//    }
+    private static String generateExecutionScript(String bucketName, String executableJar, List<String> args) {
+        List<String> cmd = new ArrayList<>();
+        cmd.add("#!/bin/bash");
+        cmd.add("yes | sudo amazon-linux-extras install java-openjdk11");
+        cmd.add("aws s3 cp s3://" + bucketName + "/" + executableJar + " " + executableJar);
+        String makeJar = "java -jar " + executableJar;
+
+        // if there are args this is data script of worker
+        if (args != null) {
+            for (String arg : args) {
+                makeJar += " " + arg;
+            }
+        }
+        cmd.add(makeJar);
+        String initScript = StringUtils.join(cmd, "\n");
+        logger.info("cmd {}", initScript);
+        String str = Base64.getEncoder().encodeToString(initScript.getBytes());
+        logger.info("base64 {}", str);
+        return str;
+    }
 //
 //    private static String join(Collection<String> s, String delimiter) {
 //        StringBuilder builder = new StringBuilder();
