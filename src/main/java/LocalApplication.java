@@ -104,7 +104,7 @@ public class LocalApplication {
         inputFiles.addAll(fileNames.subList(0, fileNames.size() / 2));
         outputFiles.addAll(fileNames.subList(fileNames.size() / 2, fileNames.size()));
 
-        inputFiles.add("dsps-assignment1.jar");
+        inputFiles.add("Manager.jar");
     }
 
     private static void executeEC2Manager() {
@@ -113,7 +113,8 @@ public class LocalApplication {
         args.add("-appQ " + applicationQueueUrl);
         args.add("-managerQ " + managerQueueUrl);
         args.add("-bucket " + bucketName);
-        instances = AWSHandler.ec2CreateInstance("manager", 1, "dsps-assignment1.jar", bucketName, args);
+        args.add("-n " + workersFilesRatio);
+        instances = AWSHandler.ec2CreateInstance("manager", 1, "Manager.jar", bucketName, args);
     }
 
     private static void configureLogger() {

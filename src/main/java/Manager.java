@@ -1,6 +1,7 @@
 import com.google.gson.Gson;
 import org.apache.commons.cli.*;
 import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang.math.NumberUtils;
 import org.apache.log4j.BasicConfigurator;
 import org.apache.log4j.Level;
 import org.slf4j.Logger;
@@ -12,6 +13,7 @@ public class Manager {
     static String applicationQueueUrl;
     static String managerQueueUrl;
     static String bucketName;
+    static int workersFilesRatio;
 
     public static void main(String[] args) {
         configureLogger();
@@ -34,6 +36,10 @@ public class Manager {
         bucketNameOption.setRequired(true);
         options.addOption(bucketNameOption);
 
+        Option workersFilesRatioOption = new Option("n", true, "Workers files ratio");
+        workersFilesRatioOption.setRequired(true);
+        options.addOption(workersFilesRatioOption);
+
         CommandLineParser parser = new DefaultParser();
         HelpFormatter formatter = new HelpFormatter();
         CommandLine cmd = null;
@@ -50,10 +56,12 @@ public class Manager {
         applicationQueueUrl = cmd.getOptionValue("appQ");
         managerQueueUrl = cmd.getOptionValue("managerQ");
         bucketName = cmd.getOptionValue("bucket");
+        workersFilesRatio = NumberUtils.toInt(cmd.getOptionValue("n"));
 
         logger.info("appQUrl {}", applicationQueueUrl);
         logger.info("managerQUrl {}", managerQueueUrl);
         logger.info("bucketName {}", bucketName);
+        logger.info("workersFilesRatio {}", workersFilesRatio);
     }
 
     private static void configureLogger() {
