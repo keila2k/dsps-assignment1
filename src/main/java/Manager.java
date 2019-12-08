@@ -1,11 +1,14 @@
 import com.google.gson.Gson;
 import org.apache.commons.cli.*;
-import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.math.NumberUtils;
 import org.apache.log4j.BasicConfigurator;
 import org.apache.log4j.Level;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import software.amazon.awssdk.services.sqs.model.Message;
+
+import java.util.Arrays;
+import java.util.List;
 
 
 public class Manager {
@@ -14,13 +17,39 @@ public class Manager {
     static String managerQueueUrl;
     static String bucketName;
     static int workersFilesRatio;
+    private static Gson gson = new Gson();
+    static List<String> inputFiles;
 
     public static void main(String[] args) {
         configureLogger();
         Options options = new Options();
         parseProgramArgs(args, options);
         AWSHandler.sqsEstablishConnection();
-        AWSHandler.sendMessageToSqs(applicationQueueUrl, "{type: DONE}", true);
+        getInputFilesMessage();
+        AWSHandler.sendMessageToSqs(applicationQueueUrl, gson.toJson(new MessageDto("DONE", "")), true);
+    }
+
+    private static void getInputFilesMessage() {
+        Message inputFilesMessage;
+        logger.info("waiting for input files message at {}", managerQueueUrl);
+        do {
+            List<Message> messages = AWSHandler.receiveMessageFromSqs(managerQueueUrl, 1);
+            inputFilesMessage = messages.stream().filter(message -> {
+                String messageBodyString = message.body();
+                MessageDto messageDto = gson.fromJson(messageBodyString, MessageDto.class);
+                return messageDto.getType().equals("INPUT");
+            }).findAny().orElse(null);
+        } while (inputFilesMessage == null);
+        logger.info("found input files message at {}", managerQueueUrl);
+        MessageDto messageDto = gson.fromJson(inputFilesMessage.body(), MessageDto.class);
+//        MessageDto comes with braces [], take them off and split all inputFiles
+        String messageData = messageDto.getData().replace("[", "").replace("]", "");
+        inputFiles = Arrays.asList(messageData.split(", "));
+
+        logger.info("input files are {}", inputFiles.toString());
+
+
+        AWSHandler.deleteMessageFromSqs(managerQueueUrl, inputFilesMessage);
     }
 
     private static void parseProgramArgs(String[] args, Options options) {

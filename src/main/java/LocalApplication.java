@@ -1,6 +1,4 @@
 import com.google.gson.Gson;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
 import org.apache.commons.lang.math.NumberUtils;
 import org.apache.log4j.BasicConfigurator;
 import org.apache.log4j.Level;
@@ -10,10 +8,14 @@ import software.amazon.awssdk.services.ec2.model.Instance;
 import software.amazon.awssdk.services.sqs.model.Message;
 import software.amazon.awssdk.services.sqs.model.QueueDoesNotExistException;
 
-
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 
 public class LocalApplication {
@@ -40,6 +42,7 @@ public class LocalApplication {
         managerQueueUrl = startSqs(MANAGER_QUEUE, false);
         applicationQueueUrl = startSqs(APPLICATION_QUEUE, true);
         executeEC2Manager();
+        sendMessageToSqs(managerQueueUrl, gson.toJson(new MessageDto("INPUT", inputFiles.toString())), false);
         startPollingFromSqs();
         terminateManagerIfNeeded();
 //        downloadFilesFromS3();
@@ -57,16 +60,19 @@ public class LocalApplication {
     }
 
     private static Message startPollingFromSqs() {
+        logger.info("Waiting for DONE message in {}", applicationQueueUrl);
         Message doneMessage;
         do {
             List<Message> messages = AWSHandler.receiveMessageFromSqs(applicationQueueUrl, 5);
             doneMessage = messages.stream().filter(message -> {
-                JsonObject messageBody = gson.fromJson(message.body(), JsonElement.class).getAsJsonObject();
-                return messageBody.get("type").getAsString().equals("DONE");
+                MessageDto messageDto = gson.fromJson(message.body(), MessageDto.class);
+                return messageDto.getType().equals("DONE");
             }).findAny().orElse(null);
         } while (doneMessage == null);
         AWSHandler.deleteMessageFromSqs(applicationQueueUrl, doneMessage);
+        logger.info("Found DONE message in {}", applicationQueueUrl);
         return doneMessage;
+
     }
 
     private static void sendMessageToSqs(String queueUrl, String message, Boolean isFifo) {
@@ -90,7 +96,8 @@ public class LocalApplication {
         AWSHandler.s3EstablishConnection();
         bucketName = AWSHandler.s3GenerateBucketName("ori-shay");
         AWSHandler.s3CreateBucket(bucketName);
-        AWSHandler.s3UploadFiles(bucketName, inputFiles);
+        List<String> filesToUpload = Stream.concat(inputFiles.stream(), Stream.of("Manager.jar")).collect(Collectors.toList());
+        AWSHandler.s3UploadFiles(bucketName, filesToUpload);
     }
 
     private static void extractArgs(String[] args) {
@@ -103,8 +110,6 @@ public class LocalApplication {
         }
         inputFiles.addAll(fileNames.subList(0, fileNames.size() / 2));
         outputFiles.addAll(fileNames.subList(fileNames.size() / 2, fileNames.size()));
-
-        inputFiles.add("Manager.jar");
     }
 
     private static void executeEC2Manager() {

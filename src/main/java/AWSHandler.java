@@ -384,11 +384,14 @@ public class AWSHandler {
     }
 
     public static TerminateInstancesResponse terminateEc2Instance(Instance instance) {
+        logger.info("Beginning termination of instance: {}", instance.toString());
         TerminateInstancesRequest terminateInstancesRequest = TerminateInstancesRequest.builder()
                 .instanceIds(instance.instanceId())
                 .build();
 
-        return ec2.terminateInstances(terminateInstancesRequest);
+        TerminateInstancesResponse terminateInstancesResponse = ec2.terminateInstances(terminateInstancesRequest);
+        logger.info("Finished termination of instance: {}", instance.toString());
+        return terminateInstancesResponse;
     }
 //
 //    private static String join(Collection<String> s, String delimiter) {
