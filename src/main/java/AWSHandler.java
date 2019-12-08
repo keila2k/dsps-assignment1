@@ -1,4 +1,3 @@
-import com.sun.org.apache.xpath.internal.operations.Bool;
 import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -382,6 +381,14 @@ public class AWSHandler {
         String str = Base64.getEncoder().encodeToString(initScript.getBytes());
         logger.info("base64 {}", str);
         return str;
+    }
+
+    public static TerminateInstancesResponse terminateEc2Instance(Instance instance) {
+        TerminateInstancesRequest terminateInstancesRequest = TerminateInstancesRequest.builder()
+                .instanceIds(instance.instanceId())
+                .build();
+
+        return ec2.terminateInstances(terminateInstancesRequest);
     }
 //
 //    private static String join(Collection<String> s, String delimiter) {

@@ -39,10 +39,16 @@ public class LocalApplication {
         AWSHandler.sqsEstablishConnection();
         managerQueueUrl = startSqs(MANAGER_QUEUE, false);
         applicationQueueUrl = startSqs(APPLICATION_QUEUE, true);
-        handleEC2();
-//        sendMessageToSqs(managerQueueUrl, inputFiles.get(0), false);
+        executeEC2Manager();
         startPollingFromSqs();
+        terminateManagerIfNeeded();
 //        downloadFilesFromS3();
+    }
+
+    private static void terminateManagerIfNeeded() {
+        if (isTerminate) {
+            AWSHandler.terminateEc2Instance(instances.get(0));
+        }
     }
 
 
@@ -101,7 +107,7 @@ public class LocalApplication {
         inputFiles.add("dsps-assignment1.jar");
     }
 
-    private static void handleEC2() {
+    private static void executeEC2Manager() {
         AWSHandler.ec2EstablishConnection();
         List<String> args = new ArrayList<>();
         args.add("-appQ " + applicationQueueUrl);
