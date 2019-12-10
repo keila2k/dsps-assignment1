@@ -367,7 +367,10 @@ public class AWSHandler {
     private static String generateExecutionScript(String bucketName, String executableJar, List<String> args) {
         List<String> cmd = new ArrayList<>();
         cmd.add("#!/bin/bash");
-        cmd.add("yes | sudo amazon-linux-extras install java-openjdk11");
+        cmd.add("sudo yum install -y java-1.8.0-openjdk.x86_64");
+        cmd.add("sudo /usr/sbin/alternatives --set java /usr/lib/jvm/jre-1.8.0-openjdk.x86_64/bin/java");
+        cmd.add("sudo /usr/sbin/alternatives --set javac /usr/lib/jvm/jre-1.8.0-openjdk.x86_64/bin/javac");
+        cmd.add("sudo yum remove java-1.7");
         cmd.add("aws s3 cp s3://" + bucketName + "/" + executableJar + " " + executableJar);
         String makeJar = "java -jar " + executableJar;
 

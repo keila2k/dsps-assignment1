@@ -1,3 +1,4 @@
+import dto.MESSAGE_TYPE;
 import dto.MessageDto;
 import com.google.gson.Gson;
 import org.apache.commons.cli.*;
@@ -7,10 +8,12 @@ import org.apache.log4j.Level;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.core.ResponseInputStream;
+import software.amazon.awssdk.services.ec2.model.Instance;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.sqs.model.Message;
 
 import java.io.*;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -19,39 +22,47 @@ public class Manager {
     private static final Logger logger = LoggerFactory.getLogger(AWSHandler.class);
     static String applicationQueueUrl;
     static String managerQueueUrl;
+    static String workersQueueUrl;
     static String bucketName;
     static int workersFilesRatio;
     private static Gson gson = new Gson();
     static List<String> inputFiles;
     static BufferedReader reader;
 
-
     public static void main(String[] args) {
         configureLogger();
         Options options = new Options();
         parseProgramArgs(args, options);
         AWSHandler.sqsEstablishConnection();
+        workersQueueUrl = AWSHandler.sqsCreateQueue("workersQ", false);
         getInputFilesMessage();
         AWSHandler.s3EstablishConnection();
+        AWSHandler.ec2EstablishConnection();
         handleInputFiles();
-        AWSHandler.sendMessageToSqs(applicationQueueUrl, gson.toJson(new MessageDto("DONE", "")), true);
+        AWSHandler.sendMessageToSqs(applicationQueueUrl, gson.toJson(new MessageDto(MESSAGE_TYPE.DONE, "")), true);
     }
 
     private static void handleInputFiles() {
-        inputFiles.forEach(inputFile -> {
-                    ResponseInputStream<GetObjectResponse> inputStream = AWSHandler.s3ReadFile(bucketName, inputFile);
-                    try {
-                        reader = new BufferedReader(new InputStreamReader(inputStream));
-                        String line = reader.readLine();
-                        while (line != null) {
-                            System.out.println(line);
-                            line = reader.readLine();
-                        }
-                    } catch (IOException e) {
-                        e.printStackTrace();
+        int workerId = 0;
+        for (String inputFile : inputFiles) {
+            ResponseInputStream<GetObjectResponse> inputStream = AWSHandler.s3ReadFile(bucketName, inputFile);
+            try {
+                reader = new BufferedReader(new InputStreamReader(inputStream));
+                String line = reader.readLine();
+                while (line != null) {
+                    int counter = 0;
+                    List<String> args = new ArrayList<>();
+                    List<Instance> instances = AWSHandler.ec2CreateInstance(String.format("worker%d", workerId++), 1, "worker.jar", bucketName, new ArrayList<>());
+                    while (line != null && counter <= workersFilesRatio) {
+                        AWSHandler.sendMessageToSqs(workersQueueUrl, gson.toJson(new MessageDto(MESSAGE_TYPE.TASK, line)), false);
+                        line = reader.readLine();
+                        counter++;
                     }
                 }
-        );
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
     }
 
     private static void getInputFilesMessage() {
@@ -62,7 +73,7 @@ public class Manager {
             inputFilesMessage = messages.stream().filter(message -> {
                 String messageBodyString = message.body();
                 MessageDto messageDto = gson.fromJson(messageBodyString, MessageDto.class);
-                return messageDto.getType().equals("INPUT");
+                return messageDto.getType().equals(MESSAGE_TYPE.INPUT);
             }).findAny().orElse(null);
         } while (inputFilesMessage == null);
         logger.info("found input files message at {}", managerQueueUrl);

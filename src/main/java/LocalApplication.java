@@ -1,3 +1,4 @@
+import dto.MESSAGE_TYPE;
 import dto.MessageDto;
 import com.google.gson.Gson;
 import org.apache.commons.lang.math.NumberUtils;
@@ -43,7 +44,7 @@ public class LocalApplication {
         managerQueueUrl = startSqs(MANAGER_QUEUE, false);
         applicationQueueUrl = startSqs(APPLICATION_QUEUE, true);
         executeEC2Manager();
-        sendMessageToSqs(managerQueueUrl, gson.toJson(new MessageDto("INPUT", inputFiles.toString())), false);
+        sendMessageToSqs(managerQueueUrl, gson.toJson(new MessageDto(MESSAGE_TYPE.INPUT, inputFiles.toString())), false);
         startPollingFromSqs();
         terminateManagerIfNeeded();
 //        downloadFilesFromS3();
@@ -67,7 +68,7 @@ public class LocalApplication {
             List<Message> messages = AWSHandler.receiveMessageFromSqs(applicationQueueUrl, 5);
             doneMessage = messages.stream().filter(message -> {
                 MessageDto messageDto = gson.fromJson(message.body(), MessageDto.class);
-                return messageDto.getType().equals("DONE");
+                return messageDto.getType().equals(MESSAGE_TYPE.DONE);
             }).findAny().orElse(null);
         } while (doneMessage == null);
         AWSHandler.deleteMessageFromSqs(applicationQueueUrl, doneMessage);
