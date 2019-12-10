@@ -1,6 +1,7 @@
 import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.ec2.Ec2Client;
@@ -165,6 +166,7 @@ public class AWSHandler {
         logger.info("Finished uploading input files: {}", inputFiles.toString());
 
     }
+
 
     public static void s3Download(String bucketName, String key, File downloadTo) {
         logger.info("Beginning downloading file {}", key);
@@ -392,6 +394,14 @@ public class AWSHandler {
         TerminateInstancesResponse terminateInstancesResponse = ec2.terminateInstances(terminateInstancesRequest);
         logger.info("Finished termination of instance: {}", instance.toString());
         return terminateInstancesResponse;
+    }
+
+    public static ResponseInputStream<GetObjectResponse> s3ReadFile(String bucketName, String inputFile) {
+        logger.info("Beginning reading file {}", inputFile);
+        GetObjectRequest getObjectRequest = GetObjectRequest.builder().bucket(bucketName).key(inputFile).build();
+        ResponseInputStream<GetObjectResponse> inputStream = s3.getObject(getObjectRequest);
+        logger.info("Successful got file {}", inputFile);
+        return inputStream;
     }
 //
 //    private static String join(Collection<String> s, String delimiter) {

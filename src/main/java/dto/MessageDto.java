@@ -1,6 +1,9 @@
+package dto;
+
 public class MessageDto {
     private String type;
     private String data;
+//    TODO: change data to List<String>
 
     public MessageDto(String type, String data) {
         this.type = type;

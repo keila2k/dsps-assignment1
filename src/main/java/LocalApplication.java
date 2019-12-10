@@ -1,3 +1,4 @@
+import dto.MessageDto;
 import com.google.gson.Gson;
 import org.apache.commons.lang.math.NumberUtils;
 import org.apache.log4j.BasicConfigurator;
