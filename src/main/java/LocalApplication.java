@@ -98,7 +98,7 @@ public class LocalApplication {
         AWSHandler.s3EstablishConnection();
         bucketName = AWSHandler.s3GenerateBucketName("ori-shay");
         AWSHandler.s3CreateBucket(bucketName);
-        List<String> filesToUpload = Stream.concat(inputFiles.stream(), Stream.of("Manager.jar")).collect(Collectors.toList());
+        List<String> filesToUpload = Stream.concat(inputFiles.stream(), Stream.of("Manager.jar", "Worker.jar")).collect(Collectors.toList());
         AWSHandler.s3UploadFiles(bucketName, filesToUpload);
     }
 

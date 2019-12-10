@@ -8,7 +8,6 @@ import org.apache.log4j.Level;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.core.ResponseInputStream;
-import software.amazon.awssdk.services.ec2.model.Instance;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.sqs.model.Message;
 
@@ -22,6 +21,7 @@ public class Manager {
     private static final Logger logger = LoggerFactory.getLogger(AWSHandler.class);
     static String applicationQueueUrl;
     static String managerQueueUrl;
+    static String doneTasksQueueUrl;
     static String workersQueueUrl;
     static String bucketName;
     static int workersFilesRatio;
@@ -35,6 +35,7 @@ public class Manager {
         parseProgramArgs(args, options);
         AWSHandler.sqsEstablishConnection();
         workersQueueUrl = AWSHandler.sqsCreateQueue("workersQ", false);
+        doneTasksQueueUrl = AWSHandler.sqsCreateQueue("doneTasksQ", false);
         getInputFilesMessage();
         AWSHandler.s3EstablishConnection();
         AWSHandler.ec2EstablishConnection();
@@ -52,7 +53,10 @@ public class Manager {
                 while (line != null) {
                     int counter = 0;
                     List<String> args = new ArrayList<>();
-                    List<Instance> instances = AWSHandler.ec2CreateInstance(String.format("worker%d", workerId++), 1, "worker.jar", bucketName, new ArrayList<>());
+                    args.add("-workersQ " + workersQueueUrl);
+                    args.add("-doneTasksQ " + doneTasksQueueUrl);
+                    args.add("-n " + workersFilesRatio);
+                    AWSHandler.ec2CreateInstance(String.format("worker%d", workerId++), 1, "Worker.jar", bucketName, args);
                     while (line != null && counter <= workersFilesRatio) {
                         AWSHandler.sendMessageToSqs(workersQueueUrl, gson.toJson(new MessageDto(MESSAGE_TYPE.TASK, line)), false);
                         line = reader.readLine();
