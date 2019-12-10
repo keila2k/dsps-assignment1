@@ -9,12 +9,10 @@ import org.apache.log4j.BasicConfigurator;
 import org.apache.log4j.Level;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import software.amazon.awssdk.auth.signer.params.Aws4PresignerParams;
 import software.amazon.awssdk.services.sqs.model.Message;
 
 import java.util.List;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 public class Worker {
     private static final Logger logger = LoggerFactory.getLogger(AWSHandler.class);
@@ -23,8 +21,6 @@ public class Worker {
     static int workersFilesRatio;
     static int numOfHandledReviews = 0;
     private static Gson gson = new Gson();
-    private static SentimentAnalysis sentimentAnalysis = new SentimentAnalysis();
-    private static NamedEntityRecognition namedEntityRecognition = new NamedEntityRecognition();
 
 
     public static void main(String[] args) {
@@ -38,15 +34,19 @@ public class Worker {
     private static void handleReviews() {
         while (numOfHandledReviews != workersFilesRatio) {
             List<Message> messages = AWSHandler.receiveMessageFromSqs(workersQueueUrl, 0, 1);
-            List<ProductReview> productReviews = messages.stream().map(message -> gson.fromJson(message.body(), ProductReview.class)).collect(Collectors.toList());
+            List<ProductReview> productReviews = messages.stream().map(message -> {
+                MessageDto msg = gson.fromJson(message.body(), MessageDto.class);
+                ProductReview rev = gson.fromJson(msg.getData(), ProductReview.class);
+                return rev;
+            }).collect(Collectors.toList());
             for (ProductReview productReview : productReviews) {
                 List<Review> reviews = productReview.getReviews();
                 for (Review review : reviews) {
-                    int sentiment = sentimentAnalysis.findSentiment(review.getText());
-                    System.out.println(String.format("Sentiment score for review {} is {}", review.getId(), sentiment));
-                    namedEntityRecognition.printEntities(review.getText());
+                    int sentiment = SentimentAnalysis.findSentiment(review.getText());
+                    List<String> namedEntities = NamedEntityRecognition.printEntities(review.getText());
+                    int rating = review.getRating();
+                    boolean isSarcastic = rating == ++sentiment;
                 }
-//                AWSHandler.sendMessageToSqs(doneTasksQueueUrl, gson.toJson(new MessageDto(MESSAGE_TYPE.ANSWER, "moshe")), false);
             }
             messages.forEach(message -> AWSHandler.deleteMessageFromSqs(workersQueueUrl, message));
         }
