@@ -16,9 +16,6 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
-
 
 public class LocalApplication {
     public static final String MANAGER_QUEUE = "managerQueue";
@@ -98,8 +95,7 @@ public class LocalApplication {
         AWSHandler.s3EstablishConnection();
         bucketName = AWSHandler.s3GenerateBucketName("ori-shay");
         AWSHandler.s3CreateBucket(bucketName);
-        List<String> filesToUpload = Stream.concat(inputFiles.stream(), Stream.of("Manager.jar", "Worker.jar")).collect(Collectors.toList());
-        AWSHandler.s3UploadFiles(bucketName, filesToUpload);
+        AWSHandler.s3UploadFiles(bucketName, inputFiles);
     }
 
     private static void extractArgs(String[] args) {

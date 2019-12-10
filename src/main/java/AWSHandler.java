@@ -263,19 +263,16 @@ public class AWSHandler {
     }
 
 
-
     private static String generateExecutionScript(String bucketName, String executableJar, List<String> args) {
         List<String> cmd = new ArrayList<>();
         cmd.add("#!/bin/bash");
-        cmd.add("sudo yum install -y java-1.8.0-openjdk.x86_64");
-        cmd.add("sudo /usr/sbin/alternatives --set java /usr/lib/jvm/jre-1.8.0-openjdk.x86_64/bin/java");
-        cmd.add("sudo /usr/sbin/alternatives --set javac /usr/lib/jvm/jre-1.8.0-openjdk.x86_64/bin/javac");
+        cmd.add("sudo amazon-linux-extras install java-openjdk11");
+        cmd.add("update-alternatives --set java java-11-openjdk.x86_64");
         cmd.add("sudo yum remove java-1.7");
-
-        cmd.add("sudo wget http://repos.fedorapeople.org/repos/dchen/apache-maven/epel-apache-maven.repo -O /etc/yum.repos.d/epel-apache-maven.repo");
-        cmd.add("sudo sed -i s/\\$releasever/6/g /etc/yum.repos.d/epel-apache-maven.repo");
-        cmd.add("sudo yum install -y apache-maven");
-        cmd.add("aws s3 cp s3://" + bucketName + "/" + executableJar + " " + executableJar);
+        cmd.add("sudo yum install -y git");
+        cmd.add("sudo yum install -y maven");
+        cmd.add("git clone https://github.com/keila2k/dsps-assignment1.git && cd dsps-assignment1");
+        cmd.add("mvn package && cd target");
         String makeJar = "java -jar " + executableJar;
 
         // if there are args this is data script of worker
