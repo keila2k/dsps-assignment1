@@ -266,13 +266,14 @@ public class AWSHandler {
     private static String generateExecutionScript(String bucketName, String executableJar, List<String> args) {
         List<String> cmd = new ArrayList<>();
         cmd.add("#!/bin/bash");
-        cmd.add("sudo amazon-linux-extras install java-openjdk11");
+        cmd.add("sudo amazon-linux-extras install -y java-openjdk11");
         cmd.add("update-alternatives --set java java-11-openjdk.x86_64");
         cmd.add("sudo yum remove java-1.7");
         cmd.add("sudo yum install -y git");
         cmd.add("sudo yum install -y maven");
         cmd.add("git clone https://github.com/keila2k/dsps-assignment1.git && cd dsps-assignment1");
         cmd.add("mvn package && cd target");
+
         String makeJar = "java -jar " + executableJar;
 
         // if there are args this is data script of worker
@@ -282,6 +283,7 @@ public class AWSHandler {
             }
         }
         cmd.add(makeJar);
+        cmd.add("");
         String initScript = StringUtils.join(cmd, "\n");
         logger.info("cmd {}", initScript);
         String str = Base64.getEncoder().encodeToString(initScript.getBytes());
