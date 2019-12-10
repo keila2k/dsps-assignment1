@@ -14,8 +14,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 public class LocalApplication {
     public static final String MANAGER_QUEUE = "managerQueue";
@@ -25,6 +24,7 @@ public class LocalApplication {
     static List<String> fileNames = new ArrayList<String>();
     static List<String> inputFiles = new ArrayList<String>();
     static List<String> outputFiles = new ArrayList<String>();
+    static Map<String, String> inputOutputMap;
     static Integer workersFilesRatio = 0;
     static Boolean isTerminate = false;
     static String managerQueueUrl;
@@ -41,10 +41,19 @@ public class LocalApplication {
         managerQueueUrl = startSqs(MANAGER_QUEUE, false);
         applicationQueueUrl = startSqs(APPLICATION_QUEUE, true);
         executeEC2Manager();
-        sendMessageToSqs(managerQueueUrl, gson.toJson(new MessageDto(MESSAGE_TYPE.INPUT, inputFiles.toString())), false);
+        inputOutputMap = zipLists(inputFiles, outputFiles);
+        sendMessageToSqs(managerQueueUrl, gson.toJson(new MessageDto(MESSAGE_TYPE.INPUT, gson.toJson(inputOutputMap, HashMap.class))), false);
         startPollingFromSqs();
         terminateManagerIfNeeded();
 //        downloadFilesFromS3();
+    }
+
+    private static Map<String, String> zipLists(List<String> lhs, List<String> rhs) {
+        Map<String, String> map = new HashMap<>();
+        Iterator<String> i1 = lhs.iterator();
+        Iterator<String> i2 = rhs.iterator();
+        while (i1.hasNext() || i2.hasNext()) map.put(i1.next(), i2.next());
+        return map;
     }
 
     private static void terminateManagerIfNeeded() {
@@ -52,7 +61,6 @@ public class LocalApplication {
             AWSHandler.terminateEc2Instance(instances.get(0));
         }
     }
-
 
     private static void downloadFilesFromS3() {
         AWSHandler.s3DownloadFiles(bucketName, inputFiles, "./output/");

@@ -1,6 +1,8 @@
 import com.google.gson.Gson;
 import dto.MESSAGE_TYPE;
 import dto.MessageDto;
+import dto.ReviewAnalysisDto;
+import dto.Task;
 import org.apache.commons.cli.*;
 import org.apache.commons.lang.math.NumberUtils;
 import org.apache.log4j.BasicConfigurator;
@@ -14,9 +16,8 @@ import software.amazon.awssdk.services.sqs.model.Message;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
+import java.util.stream.Collectors;
 
 
 public class Manager {
@@ -30,6 +31,7 @@ public class Manager {
     private static Gson gson = new Gson();
     static List<String> inputFiles;
     static BufferedReader reader;
+    private static ArrayList<String> outputFiles;
 
     public static void main(String[] args) {
         configureLogger();
@@ -42,7 +44,21 @@ public class Manager {
         AWSHandler.s3EstablishConnection();
         AWSHandler.ec2EstablishConnection();
         handleInputFiles();
+        handleDoneTasks();
         AWSHandler.sendMessageToSqs(applicationQueueUrl, gson.toJson(new MessageDto(MESSAGE_TYPE.DONE, "")), true);
+    }
+
+    private static void handleDoneTasks() {
+        List<Message> messages = AWSHandler.receiveMessageFromSqs(doneTasksQueueUrl, 0);
+        List<Task> doneTasks = messages.stream().map(message -> {
+            MessageDto messageDto = gson.fromJson(message.body(), MessageDto.class);
+            return gson.fromJson(messageDto.getData(), Task.class);
+        }).collect(Collectors.toList());
+        doneTasks.forEach(doneTask -> {
+            String inputFile = gson.fromJson(doneTask.getFilename(), String.class);
+            ReviewAnalysisDto reviewAnalysisDto = gson.fromJson(doneTask.getData(), ReviewAnalysisDto.class);
+
+        });
     }
 
     private static void handleInputFiles() {
@@ -57,10 +73,10 @@ public class Manager {
                     List<String> args = new ArrayList<>();
                     args.add("-workersQ " + workersQueueUrl);
                     args.add("-doneTasksQ " + doneTasksQueueUrl);
-                    args.add("-n " + workersFilesRatio);
                     AWSHandler.ec2CreateInstance(String.format("worker%d", workerId++), 1, "Worker.jar", bucketName, args);
                     while (line != null && counter <= workersFilesRatio) {
-                        AWSHandler.sendMessageToSqs(workersQueueUrl, gson.toJson(new MessageDto(MESSAGE_TYPE.TASK, line)), false);
+                        String task = gson.toJson(new Task(inputFile, line));
+                        AWSHandler.sendMessageToSqs(workersQueueUrl, gson.toJson(new MessageDto(MESSAGE_TYPE.TASK, task)), false);
                         line = reader.readLine();
                         counter++;
                     }
@@ -85,9 +101,9 @@ public class Manager {
         logger.info("found input files message at {}", managerQueueUrl);
         MessageDto messageDto = gson.fromJson(inputFilesMessage.body(), MessageDto.class);
 //        Dto.MessageDto comes with braces [], take them off and split all inputFiles
-        String messageData = messageDto.getData().replace("[", "").replace("]", "");
-        inputFiles = Arrays.asList(messageData.split(", "));
-
+        HashMap<String, String> inputOutputMap = gson.fromJson(messageDto.getData(), HashMap.class);
+        inputFiles = new ArrayList<String>(inputOutputMap.keySet());
+        outputFiles = new ArrayList<String>(inputOutputMap.values());
         logger.info("input files are {}", inputFiles.toString());
 
 

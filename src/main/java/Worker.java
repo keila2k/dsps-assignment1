@@ -1,8 +1,6 @@
 import com.google.gson.Gson;
-import dto.MESSAGE_TYPE;
+import dto.*;
 import dto.MessageDto;
-import dto.ProductReview;
-import dto.Review;
 import org.apache.commons.cli.*;
 import org.apache.commons.lang.math.NumberUtils;
 import org.apache.log4j.BasicConfigurator;
@@ -18,8 +16,6 @@ public class Worker {
     private static final Logger logger = LoggerFactory.getLogger(AWSHandler.class);
     static String doneTasksQueueUrl;
     static String workersQueueUrl;
-    static int workersFilesRatio;
-    static int numOfHandledReviews = 0;
     private static Gson gson = new Gson();
 
 
@@ -32,24 +28,33 @@ public class Worker {
     }
 
     private static void handleReviews() {
-        while (numOfHandledReviews != workersFilesRatio) {
+        while (true) {
             List<Message> messages = AWSHandler.receiveMessageFromSqs(workersQueueUrl, 0, 1);
-            List<ProductReview> productReviews = messages.stream().map(message -> {
+            List<Task> tasks = messages.stream().map(message -> {
                 MessageDto msg = gson.fromJson(message.body(), MessageDto.class);
-                ProductReview rev = gson.fromJson(msg.getData(), ProductReview.class);
-                return rev;
+                return gson.fromJson(msg.getData(), Task.class);
             }).collect(Collectors.toList());
-            for (ProductReview productReview : productReviews) {
+            for (Task task : tasks) {
+                ProductReview productReview = gson.fromJson(task.getData(), ProductReview.class);
                 List<Review> reviews = productReview.getReviews();
                 for (Review review : reviews) {
-                    int sentiment = SentimentAnalysis.findSentiment(review.getText());
-                    List<String> namedEntities = NamedEntityRecognition.printEntities(review.getText());
-                    int rating = review.getRating();
-                    boolean isSarcastic = rating == ++sentiment;
+                    String doneTaskAsString = analyzeReview(task, review);
+                    String doneMessage = gson.toJson(new MessageDto(MESSAGE_TYPE.ANSWER, doneTaskAsString), MessageDto.class);
+                    AWSHandler.sendMessageToSqs(doneTasksQueueUrl, doneMessage, false);
                 }
             }
+
             messages.forEach(message -> AWSHandler.deleteMessageFromSqs(workersQueueUrl, message));
         }
+    }
+
+    private static String analyzeReview(Task task, Review review) {
+        int sentiment = SentimentAnalysis.findSentiment(review.getText());
+        List<String> namedEntities = NamedEntityRecognition.printEntities(review.getText());
+        int rating = review.getRating();
+        boolean isSarcastic = rating == sentiment + 1;
+        ReviewAnalysisDto reviewAnalysisDto = new ReviewAnalysisDto(isSarcastic, sentiment, namedEntities);
+        return gson.toJson(new Task(task.getFilename(), gson.toJson(reviewAnalysisDto, ReviewAnalysisDto.class)));
     }
 
     private static void parseProgramArgs(String[] args, Options options) {
@@ -80,11 +85,9 @@ public class Worker {
 
         workersQueueUrl = cmd.getOptionValue("workersQ");
         doneTasksQueueUrl = cmd.getOptionValue("doneTasksQ");
-        workersFilesRatio = NumberUtils.toInt(cmd.getOptionValue("n"));
 
         logger.info("workersQ {}", workersQueueUrl);
         logger.info("doneTasksQ {}", doneTasksQueueUrl);
-        logger.info("workersFilesRatio {}", workersFilesRatio);
     }
 
 
