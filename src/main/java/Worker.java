@@ -2,6 +2,7 @@ import com.google.gson.Gson;
 import dto.MESSAGE_TYPE;
 import dto.MessageDto;
 import dto.ProductReview;
+import dto.Review;
 import org.apache.commons.cli.*;
 import org.apache.commons.lang.math.NumberUtils;
 import org.apache.log4j.BasicConfigurator;
@@ -22,6 +23,8 @@ public class Worker {
     static int workersFilesRatio;
     static int numOfHandledReviews = 0;
     private static Gson gson = new Gson();
+    private static SentimentAnalysis sentimentAnalysis = new SentimentAnalysis();
+    private static NamedEntityRecognition namedEntityRecognition = new NamedEntityRecognition();
 
 
     public static void main(String[] args) {
@@ -37,7 +40,13 @@ public class Worker {
             List<Message> messages = AWSHandler.receiveMessageFromSqs(workersQueueUrl, 0, 1);
             List<ProductReview> productReviews = messages.stream().map(message -> gson.fromJson(message.body(), ProductReview.class)).collect(Collectors.toList());
             for (ProductReview productReview : productReviews) {
-                AWSHandler.sendMessageToSqs(doneTasksQueueUrl, gson.toJson(new MessageDto(MESSAGE_TYPE.ANSWER, "moshe")), false);
+                List<Review> reviews = productReview.getReviews();
+                for (Review review : reviews) {
+                    int sentiment = sentimentAnalysis.findSentiment(review.getText());
+                    System.out.println(String.format("Sentiment score for review {} is {}", review.getId(), sentiment));
+                    namedEntityRecognition.printEntities(review.getText());
+                }
+//                AWSHandler.sendMessageToSqs(doneTasksQueueUrl, gson.toJson(new MessageDto(MESSAGE_TYPE.ANSWER, "moshe")), false);
             }
             messages.forEach(message -> AWSHandler.deleteMessageFromSqs(workersQueueUrl, message));
         }

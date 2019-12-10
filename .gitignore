@@ -6,3 +6,5 @@
 /target/
 /.idea/
 /.floo
+/src/main/resources/META-INF-WORKER/META-INF/MANIFEST.MF
+/src/main/resources/META-INF-MANAGER/META-INF/MANIFEST.MF
