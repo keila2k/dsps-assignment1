@@ -66,10 +66,6 @@ public class Worker {
         doneTasksQueueOtion.setRequired(true);
         options.addOption(doneTasksQueueOtion);
 
-        Option workersFilesRatioOption = new Option("n", true, "Workers files ratio");
-        workersFilesRatioOption.setRequired(true);
-        options.addOption(workersFilesRatioOption);
-
         CommandLineParser parser = new DefaultParser();
         HelpFormatter formatter = new HelpFormatter();
         CommandLine cmd = null;
