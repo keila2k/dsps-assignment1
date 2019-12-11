@@ -20,7 +20,7 @@ import java.util.stream.Collectors;
 
 public class AWSHandler {
     private static final String AMI_ID = "ami-00068cd7555f543d5";
-    private static final String ORI_KEY_PAIR = "AWS_key1";
+    private static final String ORI_KEY_PAIR = "dsps";
     private static final String BENTZI_KEY_PAIR = "dsps";
     private static final String ORI_ROLE = "arn:aws:iam::049413562759:instance-profile/admin";
     private static final String BENTZI_ROLE = "arn:aws:iam::353189555793:instance-profile/admin";
@@ -271,8 +271,10 @@ public class AWSHandler {
         cmd.add("sudo yum remove java-1.7");
         cmd.add("sudo yum install -y git");
         cmd.add("sudo yum install -y maven");
-        cmd.add("git clone https://github.com/keila2k/dsps-assignment1.git && cd dsps-assignment1");
-        cmd.add("mvn package && cd target");
+        cmd.add("git clone https://github.com/keila2k/dsps-assignment1.git");
+        cmd.add("cd dsps-assignment1");
+        cmd.add("mvn package");
+        cmd.add("cd target");
 
         String makeJar = "java -jar " + executableJar;
 
