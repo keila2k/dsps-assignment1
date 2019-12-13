@@ -73,8 +73,9 @@ public class AWSHandler {
                 .iamInstanceProfile(IamInstanceProfileSpecification.builder().arn(isBentzi ? BENTZI_ROLE : ORI_ROLE).build())
                 .securityGroups(SECURITY_GROUP)
                 .keyName(isBentzi ? BENTZI_KEY_PAIR : ORI_KEY_PAIR)
-                .userData(generateExecutionScript(bucketName, fileToRun, args))
                 .build();
+
+        String s = generateExecutionScript(bucketName, fileToRun, args);
 
 
         RunInstancesResponse runInstancesResponse = ec2.runInstances(request);
