@@ -67,7 +67,7 @@ public class AWSHandler {
         }
         RunInstancesRequest request = RunInstancesRequest.builder()
                 .imageId(AMI_ID)
-                .instanceType(InstanceType.T2_SMALL)
+                .instanceType(InstanceType.T2_MICRO)
                 .minCount(1)
                 .maxCount(numOfInstance)
                 .iamInstanceProfile(IamInstanceProfileSpecification.builder().arn(isBentzi ? BENTZI_ROLE : ORI_ROLE).build())
@@ -267,17 +267,18 @@ public class AWSHandler {
     private static String generateExecutionScript(String bucketName, String executableJar, List<String> args) {
         List<String> cmd = new ArrayList<>();
         cmd.add("#!/bin/bash");
-        cmd.add("sudo amazon-linux-extras install -y java-openjdk11");
-        cmd.add("update-alternatives --set java java-11-openjdk.x86_64");
-        cmd.add("sudo yum remove java-1.7");
+        cmd.add("sudo amazon-linux-extras enable corretto8");
+        cmd.add("sudo yum clean metadata");
+        cmd.add("sudo yum install -y java-1.8.0-amazon-corretto");
         cmd.add("sudo yum install -y git");
         cmd.add("sudo yum install -y maven");
         cmd.add("git clone https://github.com/keila2k/dsps-assignment1.git");
         cmd.add("cd dsps-assignment1");
         cmd.add("mvn package");
         cmd.add("cd target");
+        cmd.add("sync; echo 3 > /proc/sys/vm/drop_caches");
 
-        String makeJar = "java -Xmx2g -jar " + executableJar;
+        String makeJar = "java -Xmx1g -jar " + executableJar;
 
         // if there are args this is data script of worker
         if (args != null) {
