@@ -67,7 +67,7 @@ public class AWSHandler {
         }
         RunInstancesRequest request = RunInstancesRequest.builder()
                 .imageId(AMI_ID)
-                .instanceType(InstanceType.T2_MICRO)
+                .instanceType(InstanceType.T2_SMALL)
                 .minCount(1)
                 .maxCount(numOfInstance)
                 .iamInstanceProfile(IamInstanceProfileSpecification.builder().arn(isBentzi ? BENTZI_ROLE : ORI_ROLE).build())
