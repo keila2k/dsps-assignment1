@@ -86,13 +86,14 @@ public class Manager {
 
     private static void handleInputFiles() {
         int workerId = 0;
+        int counter = 0;
         for (String inputFile : inputFiles) {
             ResponseInputStream<GetObjectResponse> inputStream = AWSHandler.s3ReadFile(bucketName, inputFile);
             try {
                 reader = new BufferedReader(new InputStreamReader(inputStream));
                 String line = reader.readLine();
-                int counter = 0;
-                createWorkerInstance(workerId);
+
+                if(counter == 0) createWorkerInstance(workerId);
                 while (line != null) {
                     ProductReview productReview = gson.fromJson(line, ProductReview.class);
                     List<Review> reviews = productReview.getReviews();
@@ -108,7 +109,6 @@ public class Manager {
                         }
                     }
                     line = reader.readLine();
-
                 }
             } catch (IOException e) {
                 e.printStackTrace();
