@@ -91,31 +91,37 @@ public class Manager {
             try {
                 reader = new BufferedReader(new InputStreamReader(inputStream));
                 String line = reader.readLine();
+                int counter = 0;
+                createWorkerInstance(workerId);
                 while (line != null) {
-                    int counter = 0;
-                    List<String> args = new ArrayList<>();
-                    args.add("-workersQ " + workersQueueUrl);
-                    args.add("-doneTasksQ " + doneTasksQueueUrl);
-                    while (counter <= workersFilesRatio) {
-                        AWSHandler.ec2CreateInstance(String.format("worker%d", workerId++), 1, "Worker.jar", bucketName, args);
-                        while (line != null) {
-                            ProductReview productReview = gson.fromJson(line, ProductReview.class);
-                            List<Review> reviews = productReview.getReviews();
-                            for (Review review : reviews) {
-                                String task = gson.toJson(new Task(inputFile, gson.toJson(review, Review.class)), Task.class);
-                                AWSHandler.sendMessageToSqs(workersQueueUrl, gson.toJson(new MessageDto(MESSAGE_TYPE.TASK, task)), false);
-                                incrementSentReviews(inputFile);
-                                counter++;
-                                line = reader.readLine();
-                            }
+                    ProductReview productReview = gson.fromJson(line, ProductReview.class);
+                    List<Review> reviews = productReview.getReviews();
+                    for (Review review : reviews) {
+                        String task = gson.toJson(new Task(inputFile, gson.toJson(review, Review.class)), Task.class);
+                        AWSHandler.sendMessageToSqs(workersQueueUrl, gson.toJson(new MessageDto(MESSAGE_TYPE.TASK, task)), false);
+                        incrementSentReviews(inputFile);
+                        counter++;
+                        if (counter == workersFilesRatio) {
+                            counter = 0;
+                            workerId++;
+                            createWorkerInstance(workerId);
                         }
                     }
+                    line = reader.readLine();
+
                 }
             } catch (IOException e) {
                 e.printStackTrace();
             }
             inputFileHandlersMap.get(inputFile).setFinishedSendingReview(true);
         }
+    }
+
+    private static void createWorkerInstance(int workerId) {
+        List<String> args = new ArrayList<>();
+        args.add("-workersQ " + workersQueueUrl);
+        args.add("-doneTasksQ " + doneTasksQueueUrl);
+        AWSHandler.ec2CreateInstance(String.format("worker%d", workerId), 1, "Worker.jar", bucketName, args);
     }
 
     private static void incrementSentReviews(String inputFile) {
