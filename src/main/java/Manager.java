@@ -1,8 +1,5 @@
 import com.google.gson.Gson;
-import dto.MESSAGE_TYPE;
-import dto.MessageDto;
-import dto.ReviewAnalysisDto;
-import dto.Task;
+import dto.*;
 import org.apache.commons.cli.*;
 import org.apache.commons.lang.math.NumberUtils;
 import org.apache.log4j.BasicConfigurator;
@@ -13,11 +10,12 @@ import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.sqs.model.Message;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.util.*;
-import java.util.stream.Collectors;
+import java.io.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 
 public class Manager {
@@ -31,7 +29,9 @@ public class Manager {
     private static Gson gson = new Gson();
     static List<String> inputFiles;
     static BufferedReader reader;
-    private static ArrayList<String> outputFiles;
+    private static HashMap<String, FileHandler> inputFileHandlersMap = new HashMap<>();
+    private static Map<String, Integer> inputCounterMap = new HashMap<>();
+
 
     public static void main(String[] args) {
         configureLogger();
@@ -41,24 +41,47 @@ public class Manager {
         workersQueueUrl = AWSHandler.sqsCreateQueue("workersQ", false);
         doneTasksQueueUrl = AWSHandler.sqsCreateQueue("doneTasksQ", false);
         getInputFilesMessage();
+        inputFiles.forEach(inputFile -> inputCounterMap.put(inputFile, 0));
         AWSHandler.s3EstablishConnection();
         AWSHandler.ec2EstablishConnection();
         handleInputFiles();
-        handleDoneTasks();
-        AWSHandler.sendMessageToSqs(applicationQueueUrl, gson.toJson(new MessageDto(MESSAGE_TYPE.DONE, "")), true);
+        while (true) handleDoneTasks();
+//        AWSHandler.sendMessageToSqs(applicationQueueUrl, gson.toJson(new MessageDto(MESSAGE_TYPE.DONE, "")), true);
     }
+
 
     private static void handleDoneTasks() {
         List<Message> messages = AWSHandler.receiveMessageFromSqs(doneTasksQueueUrl, 0);
-        List<Task> doneTasks = messages.stream().map(message -> {
+        messages.forEach(message -> {
             MessageDto messageDto = gson.fromJson(message.body(), MessageDto.class);
-            return gson.fromJson(messageDto.getData(), Task.class);
-        }).collect(Collectors.toList());
-        doneTasks.forEach(doneTask -> {
+            Task doneTask = gson.fromJson(messageDto.getData(), Task.class);
             String inputFile = gson.fromJson(doneTask.getFilename(), String.class);
-            ReviewAnalysisDto reviewAnalysisDto = gson.fromJson(doneTask.getData(), ReviewAnalysisDto.class);
-
+            FileHandler fileHandler = inputFileHandlersMap.get(inputFile);
+            BufferedWriter writer = fileHandler.getOutputBuffer();
+            incrementHandledReviews(inputFile);
+            try {
+                writer.write(doneTask.getData());
+                writer.newLine();
+                AWSHandler.deleteMessageFromSqs(doneTasksQueueUrl, message);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            Boolean finishedSendingReview = fileHandler.getFinishedSendingReview();
+            AtomicInteger numOfSentReviews = fileHandler.getNumOfSentReviews();
+            AtomicInteger numOfHandledReviews = fileHandler.getNumOfHandledReviews();
+            if (finishedSendingReview && (numOfHandledReviews.get() == numOfSentReviews.get())) {
+                try {
+                    fileHandler.getOutputBuffer().close();
+                    AWSHandler.s3Upload(bucketName, new File(fileHandler.getOutputFile()));
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
         });
+    }
+
+    private static void incrementHandledReviews(String inputFile) {
+        inputFileHandlersMap.get(inputFile).incrementHandledReviews();
     }
 
     private static void handleInputFiles() {
@@ -73,18 +96,30 @@ public class Manager {
                     List<String> args = new ArrayList<>();
                     args.add("-workersQ " + workersQueueUrl);
                     args.add("-doneTasksQ " + doneTasksQueueUrl);
-                    AWSHandler.ec2CreateInstance(String.format("worker%d", workerId++), 1, "Worker.jar", bucketName, args);
-                    while (line != null && counter <= workersFilesRatio) {
-                        String task = gson.toJson(new Task(inputFile, line));
-                        AWSHandler.sendMessageToSqs(workersQueueUrl, gson.toJson(new MessageDto(MESSAGE_TYPE.TASK, task)), false);
-                        line = reader.readLine();
-                        counter++;
+                    while (counter <= workersFilesRatio) {
+                        AWSHandler.ec2CreateInstance(String.format("worker%d", workerId++), 1, "Worker.jar", bucketName, args);
+                        while (line != null) {
+                            ProductReview productReview = gson.fromJson(line, ProductReview.class);
+                            List<Review> reviews = productReview.getReviews();
+                            for (Review review : reviews) {
+                                String task = gson.toJson(new Task(inputFile, gson.toJson(review, Review.class)), Task.class);
+                                AWSHandler.sendMessageToSqs(workersQueueUrl, gson.toJson(new MessageDto(MESSAGE_TYPE.TASK, task)), false);
+                                incrementSentReviews(inputFile);
+                                counter++;
+                                line = reader.readLine();
+                            }
+                        }
                     }
                 }
             } catch (IOException e) {
                 e.printStackTrace();
             }
+            inputFileHandlersMap.get(inputFile).setFinishedSendingReview(true);
         }
+    }
+
+    private static void incrementSentReviews(String inputFile) {
+        inputFileHandlersMap.get(inputFile).incrementSentReviews();
     }
 
     private static void getInputFilesMessage() {
@@ -103,7 +138,10 @@ public class Manager {
 //        Dto.MessageDto comes with braces [], take them off and split all inputFiles
         HashMap<String, String> inputOutputMap = gson.fromJson(messageDto.getData(), HashMap.class);
         inputFiles = new ArrayList<String>(inputOutputMap.keySet());
-        outputFiles = new ArrayList<String>(inputOutputMap.values());
+        inputFiles.forEach(inputFile -> {
+            String outputFile = inputOutputMap.get(inputFile);
+            inputFileHandlersMap.put(inputFile, new FileHandler(inputFile, outputFile));
+        });
         logger.info("input files are {}", inputFiles.toString());
 
 

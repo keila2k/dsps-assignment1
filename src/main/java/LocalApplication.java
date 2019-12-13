@@ -1,3 +1,4 @@
+import com.google.gson.GsonBuilder;
 import dto.MESSAGE_TYPE;
 import dto.MessageDto;
 import com.google.gson.Gson;
@@ -42,7 +43,10 @@ public class LocalApplication {
         applicationQueueUrl = startSqs(APPLICATION_QUEUE, true);
         executeEC2Manager();
         inputOutputMap = zipLists(inputFiles, outputFiles);
-        sendMessageToSqs(managerQueueUrl, gson.toJson(new MessageDto(MESSAGE_TYPE.INPUT, gson.toJson(inputOutputMap, HashMap.class))), false);
+        String inputOutpuJson = gson.toJson(inputOutputMap, HashMap.class);
+        MessageDto messageDto = new MessageDto(MESSAGE_TYPE.INPUT, inputOutpuJson);
+        String toJson = gson.toJson(messageDto, MessageDto.class);
+        sendMessageToSqs(managerQueueUrl, toJson, false);
         startPollingFromSqs();
         terminateManagerIfNeeded();
 //        downloadFilesFromS3();
