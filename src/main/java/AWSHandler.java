@@ -276,7 +276,7 @@ public class AWSHandler {
         cmd.add("mvn package");
         cmd.add("cd target");
 
-        String makeJar = "java -jar " + executableJar;
+        String makeJar = "java -Xmx2g -jar " + executableJar;
 
         // if there are args this is data script of worker
         if (args != null) {
