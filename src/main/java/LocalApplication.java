@@ -25,7 +25,7 @@ public class LocalApplication {
     public static final String MANAGER_QUEUE = "managerQueue";
     public static final String APPLICATION_QUEUE = "applicationQueue.fifo";
     private static final Logger logger = LoggerFactory.getLogger(AWSHandler.class);
-    static String bucketName;
+    static String bucketName = "ori-shay-1576324964421";
     static List<String> fileNames = new ArrayList<String>();
     static List<String> inputFiles = new ArrayList<String>();
     static List<String> outputFiles = new ArrayList<String>();
@@ -64,19 +64,18 @@ public class LocalApplication {
         createOutputFiles();
     }
 
-    private static void createOutputFiles() {
-        outputFiles.forEach(outputFile -> createOutputFile(outputFile));
-    }
-
     private static void createOutputFile(String outputFileName) {
+        logger.info("Beginning creating html output file {}", outputFileName);
         File htmlTemplate = AWSHandler.getFileFromResources("template.html");
         String htmlAsString;
-        StringBuilder body = new StringBuilder();
         try {
             htmlAsString = new String(Files.readAllBytes(htmlTemplate.toPath()));
 
             htmlAsString = htmlAsString.replace("$title", outputFileName);
             ResponseInputStream<GetObjectResponse> inputStream = AWSHandler.s3ReadFile(bucketName, outputFileName);
+            String[] split = htmlAsString.split("(?:^|\\W)--body--(?:$|\\W)");
+            BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter("./output/" + outputFileName + ".html"));
+            bufferedWriter.write(split[0]);
             BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
             String line = reader.readLine();
             while (line != null) {
@@ -87,16 +86,24 @@ public class LocalApplication {
                 coloredReview.withText(reviewOutput);
                 ContainerTag namedEntities = span().withText(reviewAnalysisDto.getNamedEntities().toString());
                 p.with(coloredReview, namedEntities, br());
-                body.append(p.renderFormatted()).append("\n");
+                bufferedWriter.write(p.renderFormatted());
+                line = reader.readLine();
             }
-            htmlAsString = htmlAsString.replace("$body", body.toString());
-            BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter("./" + outputFileName + ".html"));
-            bufferedWriter.write(htmlAsString);
+            bufferedWriter.write(split[1]);
             bufferedWriter.close();
         } catch (IOException e) {
             e.printStackTrace();
         }
+        logger.info("Finished creating html output file {}", outputFileName);
     }
+
+    private static void createOutputFiles() {
+        logger.info("Beginning creating html output files");
+        outputFiles.forEach(LocalApplication::createOutputFile);
+        logger.info("Finished creating html output files");
+
+    }
+
 
     private static Map<String, String> zipLists(List<String> lhs, List<String> rhs) {
         Map<String, String> map = new HashMap<>();
@@ -108,6 +115,7 @@ public class LocalApplication {
 
     private static void terminateManagerIfNeeded() {
         if (isTerminate) {
+            logger.info("Terminating manager");
             AWSHandler.terminateEc2Instance(instances.get(0));
         }
     }

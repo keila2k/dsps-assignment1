@@ -55,6 +55,7 @@ public class Manager {
 
     private static void terminateWorkersIfNeeded() {
         if (isTerminate) {
+            logger.info("Terminate Manager");
             workersList.forEach(AWSHandler::terminateEc2Instance);
         }
     }
@@ -70,6 +71,7 @@ public class Manager {
 
 
     private static void handleDoneTasks() {
+        logger.info("Start handling done tasks");
         List<Message> messages = AWSHandler.receiveMessageFromSqs(doneTasksQueueUrl, 0);
         messages.forEach(message -> {
             MessageDto messageDto = gson.fromJson(message.body(), MessageDto.class);
@@ -92,6 +94,7 @@ public class Manager {
                 try {
                     fileHandler.getOutputBuffer().close();
                     AWSHandler.s3Upload(bucketName, new File(fileHandler.getOutputFile()));
+                    logger.info("uploaded output: {}", fileHandler.getOutputFile());
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
