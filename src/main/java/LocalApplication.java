@@ -4,6 +4,7 @@ import dto.MessageDto;
 import dto.Review;
 import dto.ReviewAnalysisDto;
 import j2html.tags.ContainerTag;
+import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.math.NumberUtils;
 import org.apache.log4j.BasicConfigurator;
 import org.apache.log4j.Level;
@@ -26,7 +27,7 @@ public class LocalApplication {
     public static final String MANAGER_QUEUE = "managerQueue";
     public static final String APPLICATION_QUEUE = "applicationQueue.fifo";
     private static final Logger logger = LoggerFactory.getLogger(AWSHandler.class);
-    static String bucketName = "ori-shay-1576324964421";
+    static String bucketName;
     static List<String> fileNames = new ArrayList<String>();
     static List<String> inputFiles = new ArrayList<String>();
     static List<String> outputFiles = new ArrayList<String>();
@@ -168,7 +169,7 @@ public class LocalApplication {
     }
 
     private static void handleS3AndUploadInputFiles() {
-        bucketName = "ori-shay-dsps-"+ AWSHandler.getAccessKeyId();
+        bucketName = "ori-shay-dsps-" + StringUtils.lowerCase(AWSHandler.getAccessKeyId());
         AWSHandler.s3CreateBucket(bucketName);
         AWSHandler.s3UploadFiles(bucketName, inputFiles);
     }
