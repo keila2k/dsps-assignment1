@@ -1,4 +1,3 @@
-import com.google.gson.GsonBuilder;
 import dto.MESSAGE_TYPE;
 import dto.MessageDto;
 import com.google.gson.Gson;
@@ -47,9 +46,9 @@ public class LocalApplication {
         MessageDto messageDto = new MessageDto(MESSAGE_TYPE.INPUT, inputOutpuJson);
         String toJson = gson.toJson(messageDto, MessageDto.class);
         sendMessageToSqs(managerQueueUrl, toJson, false);
-        startPollingFromSqs();
+        waitDoneMessage();
         terminateManagerIfNeeded();
-//        downloadFilesFromS3();
+        downloadFilesFromS3();
     }
 
     private static Map<String, String> zipLists(List<String> lhs, List<String> rhs) {
@@ -67,10 +66,10 @@ public class LocalApplication {
     }
 
     private static void downloadFilesFromS3() {
-        AWSHandler.s3DownloadFiles(bucketName, inputFiles, "./output/");
+        AWSHandler.s3DownloadFiles(bucketName, outputFiles, "./output/");
     }
 
-    private static Message startPollingFromSqs() {
+    private static Message waitDoneMessage() {
         logger.info("Waiting for DONE message in {}", applicationQueueUrl);
         Message doneMessage;
         do {
@@ -83,7 +82,6 @@ public class LocalApplication {
         AWSHandler.deleteMessageFromSqs(applicationQueueUrl, doneMessage);
         logger.info("Found DONE message in {}", applicationQueueUrl);
         return doneMessage;
-
     }
 
     private static void sendMessageToSqs(String queueUrl, String message, Boolean isFifo) {

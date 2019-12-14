@@ -38,7 +38,7 @@ public class Worker {
                 Review review = gson.fromJson(task.getData(), Review.class);
                 ReviewAnalysisDto reviewAnalysis = analyzeReview(review);
                 String taskAsJson = gson.toJson(new Task(task.getFilename(), gson.toJson(reviewAnalysis, ReviewAnalysisDto.class)), Task.class);
-                String doneMessage = gson.toJson(new MessageDto(MESSAGE_TYPE.ANSWER, taskAsJson), MessageDto.class);
+                String doneMessage = gson.toJson(new MessageDto(MESSAGE_TYPE.   ANSWER, taskAsJson), MessageDto.class);
                 AWSHandler.sendMessageToSqs(doneTasksQueueUrl, doneMessage, false);
             }
 

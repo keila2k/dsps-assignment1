@@ -45,8 +45,17 @@ public class Manager {
         AWSHandler.s3EstablishConnection();
         AWSHandler.ec2EstablishConnection();
         handleInputFiles();
-        while (true) handleDoneTasks();
-//        AWSHandler.sendMessageToSqs(applicationQueueUrl, gson.toJson(new MessageDto(MESSAGE_TYPE.DONE, "")), true);
+        while (!isFinishedDoneTasks()) handleDoneTasks();
+        AWSHandler.sendMessageToSqs(applicationQueueUrl, gson.toJson(new MessageDto(MESSAGE_TYPE.DONE, "")), true);
+    }
+
+    private static boolean isFinishedDoneTasks() {
+        return inputFileHandlersMap.values().stream().allMatch(fileHandler -> {
+            Boolean finishedSendingReview = fileHandler.getFinishedSendingReview();
+            int numOfSentReviews = fileHandler.getNumOfSentReviews().get();
+            int numOfHandledReviews = fileHandler.getNumOfHandledReviews().get();
+            return finishedSendingReview && numOfSentReviews == numOfHandledReviews;
+        });
     }
 
 
@@ -93,7 +102,7 @@ public class Manager {
                 reader = new BufferedReader(new InputStreamReader(inputStream));
                 String line = reader.readLine();
 
-                if(counter == 0) createWorkerInstance(workerId);
+                if (counter == 0) createWorkerInstance(workerId);
                 while (line != null) {
                     ProductReview productReview = gson.fromJson(line, ProductReview.class);
                     List<Review> reviews = productReview.getReviews();
