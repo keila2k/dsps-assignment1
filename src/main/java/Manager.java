@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.services.ec2.model.Instance;
+import software.amazon.awssdk.services.ec2.model.InstanceType;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.sqs.model.Message;
 
@@ -172,7 +173,7 @@ public class Manager {
         List<String> args = new ArrayList<>();
         args.add("-workersQ " + workersQueueUrl);
         args.add("-doneTasksQ " + doneTasksQueueUrl);
-        List<Instance> instances = AWSHandler.ec2CreateInstance(String.format("worker%d", workerId), 1, "Worker.jar", bucketName, args);
+        List<Instance> instances = AWSHandler.ec2CreateInstance(String.format("worker%d", workerId), 1, "Worker.jar", bucketName, args, InstanceType.T2_LARGE);
         boolean isWorkerExists = workersList.stream().anyMatch(worker -> worker.instanceId().equals(instances.get(0).instanceId()));
         if (!isWorkerExists)
             workersList.addAll(instances);

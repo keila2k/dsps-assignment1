@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.services.ec2.model.Instance;
+import software.amazon.awssdk.services.ec2.model.InstanceType;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.sqs.model.Message;
 import software.amazon.awssdk.services.sqs.model.QueueDoesNotExistException;
@@ -65,7 +66,7 @@ public class LocalApplication {
     }
 
     private static void handleDoneMessages() {
-        while(outputFiles.size() > 0) {
+        while (outputFiles.size() > 0) {
             Message doneMessage = waitDoneMessage();
             MessageDto messageDto = gson.fromJson(doneMessage.body(), MessageDto.class);
             String outputFile = messageDto.getData();
@@ -167,7 +168,7 @@ public class LocalApplication {
     }
 
     private static void handleS3AndUploadInputFiles() {
-        bucketName = "ori-shay-dsps";
+        bucketName = "ori-shay-dsps-"+ AWSHandler.getAccessKeyId();
         AWSHandler.s3CreateBucket(bucketName);
         AWSHandler.s3UploadFiles(bucketName, inputFiles);
     }
@@ -191,7 +192,7 @@ public class LocalApplication {
         args.add("-managerQ " + managerQueueUrl);
         args.add("-bucket " + bucketName);
         args.add("-n " + workersFilesRatio);
-        instances = AWSHandler.ec2CreateInstance("manager", 1, "Manager.jar", bucketName, args);
+        instances = AWSHandler.ec2CreateInstance("manager", 1, "Manager.jar", bucketName, args, InstanceType.T2_SMALL);
     }
 
     private static void configureLogger() {

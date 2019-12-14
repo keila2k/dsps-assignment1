@@ -1,6 +1,8 @@
 import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
@@ -59,7 +61,7 @@ public class AWSHandler {
         return null;
     }
 
-    public static List<Instance> ec2CreateInstance(String instanceName, Integer numOfInstance, String fileToRun, String bucketName, List<String> args) {
+    public static List<Instance> ec2CreateInstance(String instanceName, Integer numOfInstance, String fileToRun, String bucketName, List<String> args, InstanceType instanceType) {
         List<Instance> instances = ec2IsInstanceRunning(instanceName);
         if (instances != null) {
             logger.info("Found an EC2 running instance, not creating a new one");
@@ -67,7 +69,7 @@ public class AWSHandler {
         }
         RunInstancesRequest request = RunInstancesRequest.builder()
                 .imageId(AMI_ID)
-                .instanceType(InstanceType.T2_SMALL)
+                .instanceType(instanceType)
                 .minCount(1)
                 .maxCount(numOfInstance)
                 .iamInstanceProfile(IamInstanceProfileSpecification.builder().arn(isBentzi ? BENTZI_ROLE : ORI_ROLE).build())
@@ -274,7 +276,10 @@ public class AWSHandler {
         cmd.add("yum install -y maven");
         cmd.add("git clone https://github.com/keila2k/dsps-assignment1.git");
         cmd.add("cd dsps-assignment1");
+        cmd.add("while [ ! -d \"target\" ]");
+        cmd.add("do");
         cmd.add("mvn package");
+        cmd.add("done");
         cmd.add("cd target");
         cmd.add("sync; echo 3 > /proc/sys/vm/drop_caches");
 
@@ -312,5 +317,10 @@ public class AWSHandler {
         ResponseInputStream<GetObjectResponse> inputStream = s3.getObject(getObjectRequest);
         logger.info("Successful got file {}", inputFile);
         return inputStream;
+    }
+
+    public static String getAccessKeyId() {
+        AwsCredentialsProvider awsCredentialsProvider = DefaultCredentialsProvider.create();
+        return awsCredentialsProvider.resolveCredentials().accessKeyId();
     }
 }
