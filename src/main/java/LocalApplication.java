@@ -56,12 +56,22 @@ public class LocalApplication {
         executeEC2Manager();
         inputOutputMap = zipLists(inputFiles, outputFiles);
         String inputOutpuJson = gson.toJson(inputOutputMap, HashMap.class);
-        MessageDto messageDto = new MessageDto(MESSAGE_TYPE.INPUT, inputOutpuJson);
+        MESSAGE_TYPE message_type = isTerminate ? MESSAGE_TYPE.INPUT_T : MESSAGE_TYPE.INPUT;
+        MessageDto messageDto = new MessageDto(message_type, inputOutpuJson);
         String toJson = gson.toJson(messageDto, MessageDto.class);
         sendMessageToSqs(managerQueueUrl, toJson, false);
-        waitDoneMessage();
+        handleDoneMessages();
         terminateManagerIfNeeded();
-        createOutputFiles();
+    }
+
+    private static void handleDoneMessages() {
+        while(outputFiles.size() > 0) {
+            Message doneMessage = waitDoneMessage();
+            MessageDto messageDto = gson.fromJson(doneMessage.body(), MessageDto.class);
+            String outputFile = messageDto.getData();
+            createOutputFile(outputFile);
+            outputFiles.remove(outputFile);
+        }
     }
 
     private static void createOutputFile(String outputFileName) {
@@ -131,7 +141,7 @@ public class LocalApplication {
             List<Message> messages = AWSHandler.receiveMessageFromSqs(applicationQueueUrl, 5);
             doneMessage = messages.stream().filter(message -> {
                 MessageDto messageDto = gson.fromJson(message.body(), MessageDto.class);
-                return messageDto.getType().equals(MESSAGE_TYPE.DONE);
+                return messageDto.getType().equals(MESSAGE_TYPE.DONE) && outputFiles.contains(messageDto.getData());
             }).findAny().orElse(null);
         } while (doneMessage == null);
         AWSHandler.deleteMessageFromSqs(applicationQueueUrl, doneMessage);
@@ -157,7 +167,7 @@ public class LocalApplication {
     }
 
     private static void handleS3AndUploadInputFiles() {
-        bucketName = AWSHandler.s3GenerateBucketName("ori-shay");
+        bucketName = "ori-shay-dsps";
         AWSHandler.s3CreateBucket(bucketName);
         AWSHandler.s3UploadFiles(bucketName, inputFiles);
     }
@@ -181,7 +191,6 @@ public class LocalApplication {
         args.add("-managerQ " + managerQueueUrl);
         args.add("-bucket " + bucketName);
         args.add("-n " + workersFilesRatio);
-        if (isTerminate) args.add("-t ");
         instances = AWSHandler.ec2CreateInstance("manager", 1, "Manager.jar", bucketName, args);
     }
 

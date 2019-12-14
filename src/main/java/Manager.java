@@ -16,6 +16,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 
 
@@ -28,35 +31,55 @@ public class Manager {
     static String bucketName;
     static int workersFilesRatio;
     private static Gson gson = new Gson();
-    static List<String> inputFiles;
     static BufferedReader reader;
-    private static HashMap<String, FileHandler> inputFileHandlersMap = new HashMap<>();
-    private static Map<String, Integer> inputCounterMap = new HashMap<>();
-    private static boolean isTerminate;
+
+    private static Map<String, FileHandler> inputFileHandlersMap = new ConcurrentHashMap<>();
+    private static Boolean isTerminate = false;
     private static List<Instance> workersList = new ArrayList<>();
 
 
     public static void main(String[] args) {
         configureLogger();
-        Options options = new Options();
-        parseProgramArgs(args, options);
         AWSHandler.sqsEstablishConnection();
+        AWSHandler.ec2EstablishConnection();
+        AWSHandler.s3EstablishConnection();
+        Options options = new Options();
+        ExecutorService pool = Executors.newFixedThreadPool(3);
+
+
+        parseProgramArgs(args, options);
         workersQueueUrl = AWSHandler.sqsCreateQueue("workersQ", false);
         doneTasksQueueUrl = AWSHandler.sqsCreateQueue("doneTasksQ", false);
-        getInputFilesMessage();
-        inputFiles.forEach(inputFile -> inputCounterMap.put(inputFile, 0));
-        AWSHandler.s3EstablishConnection();
-        AWSHandler.ec2EstablishConnection();
-        handleInputFiles();
-        while (!isFinishedDoneTasks()) handleDoneTasks();
-        terminateWorkersIfNeeded();
-        AWSHandler.sendMessageToSqs(applicationQueueUrl, gson.toJson(new MessageDto(MESSAGE_TYPE.DONE, "")), true);
+        Runnable getInputFilesMessageRunnable = new Runnable() {
+            @Override
+            public void run() {
+                getInputFilesMessage(); // 1
+            }
+        };
+        Runnable handleInputFilesRunnable = new Runnable() {
+            @Override
+            public void run() {
+                handleInputFiles(); // 2
+            }
+        };
+        Runnable handleDoneTasksRunnable = new Runnable() {
+            @Override
+            public void run() {
+                while (!isTerminate && !isFinishedDoneTasks()) handleDoneTasks(); // 3
+                terminateWorkersIfNeeded(); // 4
+            }
+        };
+        pool.execute(getInputFilesMessageRunnable);
+        pool.execute(handleInputFilesRunnable);
+        pool.execute(handleDoneTasksRunnable);
     }
 
     private static void terminateWorkersIfNeeded() {
-        if (isTerminate) {
-            logger.info("Terminate Manager");
-            workersList.forEach(AWSHandler::terminateEc2Instance);
+        synchronized (isTerminate) {
+            if (isTerminate) {
+                logger.info("Terminate Manager");
+                workersList.forEach(AWSHandler::terminateEc2Instance);
+            }
         }
     }
 
@@ -94,6 +117,7 @@ public class Manager {
                 try {
                     fileHandler.getOutputBuffer().close();
                     AWSHandler.s3Upload(bucketName, new File(fileHandler.getOutputFile()));
+                    AWSHandler.sendMessageToSqs(applicationQueueUrl, gson.toJson(new MessageDto(MESSAGE_TYPE.DONE, fileHandler.getOutputFile())), true);
                     logger.info("uploaded output: {}", fileHandler.getOutputFile());
                 } catch (IOException e) {
                     e.printStackTrace();
@@ -109,33 +133,38 @@ public class Manager {
     private static void handleInputFiles() {
         int workerId = 0;
         int counter = 0;
-        for (String inputFile : inputFiles) {
-            ResponseInputStream<GetObjectResponse> inputStream = AWSHandler.s3ReadFile(bucketName, inputFile);
-            try {
-                reader = new BufferedReader(new InputStreamReader(inputStream));
-                String line = reader.readLine();
-
-                if (counter == 0) createWorkerInstance(workerId);
-                while (line != null) {
-                    ProductReview productReview = gson.fromJson(line, ProductReview.class);
-                    List<Review> reviews = productReview.getReviews();
-                    for (Review review : reviews) {
-                        String task = gson.toJson(new Task(inputFile, gson.toJson(review, Review.class)), Task.class);
-                        AWSHandler.sendMessageToSqs(workersQueueUrl, gson.toJson(new MessageDto(MESSAGE_TYPE.TASK, task)), false);
-                        incrementSentReviews(inputFile);
-                        counter++;
-                        if (counter == workersFilesRatio) {
-                            counter = 0;
-                            workerId++;
-                            createWorkerInstance(workerId);
-                        }
-                    }
-                    line = reader.readLine();
+        while (true) {
+            for (String inputFile : inputFileHandlersMap.keySet()) {
+                if (inputFileHandlersMap.get(inputFile).getFinishedSendingReview()) {
+                    continue;
                 }
-            } catch (IOException e) {
-                e.printStackTrace();
+                ResponseInputStream<GetObjectResponse> inputStream = AWSHandler.s3ReadFile(bucketName, inputFile);
+                try {
+                    reader = new BufferedReader(new InputStreamReader(inputStream));
+                    String line = reader.readLine();
+
+                    if (counter == 0) createWorkerInstance(workerId);
+                    while (line != null) {
+                        ProductReview productReview = gson.fromJson(line, ProductReview.class);
+                        List<Review> reviews = productReview.getReviews();
+                        for (Review review : reviews) {
+                            String task = gson.toJson(new Task(inputFile, gson.toJson(review, Review.class)), Task.class);
+                            AWSHandler.sendMessageToSqs(workersQueueUrl, gson.toJson(new MessageDto(MESSAGE_TYPE.TASK, task)), false);
+                            incrementSentReviews(inputFile);
+                            counter++;
+                            if (counter == workersFilesRatio) {
+                                counter = 0;
+                                workerId++;
+                                createWorkerInstance(workerId);
+                            }
+                        }
+                        line = reader.readLine();
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                inputFileHandlersMap.get(inputFile).setFinishedSendingReview(true);
             }
-            inputFileHandlersMap.get(inputFile).setFinishedSendingReview(true);
         }
     }
 
@@ -152,29 +181,35 @@ public class Manager {
     }
 
     private static void getInputFilesMessage() {
-        Message inputFilesMessage;
-        logger.info("waiting for input files message at {}", managerQueueUrl);
-        do {
-            List<Message> messages = AWSHandler.receiveMessageFromSqs(managerQueueUrl, 1);
-            inputFilesMessage = messages.stream().filter(message -> {
-                String messageBodyString = message.body();
-                MessageDto messageDto = gson.fromJson(messageBodyString, MessageDto.class);
-                return messageDto.getType().equals(MESSAGE_TYPE.INPUT);
-            }).findAny().orElse(null);
-        } while (inputFilesMessage == null);
-        logger.info("found input files message at {}", managerQueueUrl);
-        MessageDto messageDto = gson.fromJson(inputFilesMessage.body(), MessageDto.class);
+        while (true) {
+            Message inputFilesMessage;
+            logger.info("waiting for input files message at {}", managerQueueUrl);
+            do {
+                List<Message> messages = AWSHandler.receiveMessageFromSqs(managerQueueUrl, 1);
+                inputFilesMessage = messages.stream().filter(message -> {
+                    String messageBodyString = message.body();
+                    MessageDto messageDto = gson.fromJson(messageBodyString, MessageDto.class);
+                    MESSAGE_TYPE messageDtoType = messageDto.getType();
+                    return messageDtoType.equals(MESSAGE_TYPE.INPUT) || messageDtoType.equals(MESSAGE_TYPE.INPUT_T);
+                }).findAny().orElse(null);
+            } while (inputFilesMessage == null);
+            logger.info("found input files message at {}", managerQueueUrl);
+            MessageDto messageDto = gson.fromJson(inputFilesMessage.body(), MessageDto.class);
 //        Dto.MessageDto comes with braces [], take them off and split all inputFiles
-        HashMap<String, String> inputOutputMap = gson.fromJson(messageDto.getData(), HashMap.class);
-        inputFiles = new ArrayList<String>(inputOutputMap.keySet());
-        inputFiles.forEach(inputFile -> {
-            String outputFile = inputOutputMap.get(inputFile);
-            inputFileHandlersMap.put(inputFile, new FileHandler(inputFile, outputFile));
-        });
-        logger.info("input files are {}", inputFiles.toString());
+            HashMap<String, String> inputOutputMap = gson.fromJson(messageDto.getData(), HashMap.class);
+            inputOutputMap.keySet().forEach(inputFile -> {
+                String outputFile = inputOutputMap.get(inputFile);
+                inputFileHandlersMap.put(inputFile, new FileHandler(inputFile, outputFile));
+            });
+            synchronized (isTerminate) {
+                isTerminate = isTerminate || messageDto.getType() == MESSAGE_TYPE.INPUT_T;
+            }
+            logger.info("input files are {}", inputOutputMap.keySet().toString());
+            logger.info("output files are {}", inputOutputMap.values().toString());
+            logger.info("terminates on finish");
 
-
-        AWSHandler.deleteMessageFromSqs(managerQueueUrl, inputFilesMessage);
+            AWSHandler.deleteMessageFromSqs(managerQueueUrl, inputFilesMessage);
+        }
     }
 
     private static void parseProgramArgs(String[] args, Options options) {
@@ -194,10 +229,6 @@ public class Manager {
         workersFilesRatioOption.setRequired(true);
         options.addOption(workersFilesRatioOption);
 
-        Option terminate = new Option("t", false, "is terminate on finish");
-        terminate.setRequired(false);
-        options.addOption(terminate);
-
         CommandLineParser parser = new DefaultParser();
         HelpFormatter formatter = new HelpFormatter();
         CommandLine cmd = null;
@@ -215,13 +246,11 @@ public class Manager {
         managerQueueUrl = cmd.getOptionValue("managerQ");
         bucketName = cmd.getOptionValue("bucket");
         workersFilesRatio = NumberUtils.toInt(cmd.getOptionValue("n"));
-        isTerminate = cmd.hasOption("t");
 
         logger.info("appQUrl {}", applicationQueueUrl);
         logger.info("managerQUrl {}", managerQueueUrl);
         logger.info("bucketName {}", bucketName);
         logger.info("workersFilesRatio {}", workersFilesRatio);
-        logger.info("isTerminate {}", isTerminate);
     }
 
     private static void configureLogger() {
