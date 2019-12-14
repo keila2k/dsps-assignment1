@@ -6,6 +6,7 @@ public class ReviewAnalysisDto {
     private boolean isSarcastic;
     private int sentiment;
     private List<String> namedEntities;
+    private Review review;
 
     public int getSentiment() {
         return sentiment;
@@ -23,10 +24,11 @@ public class ReviewAnalysisDto {
         this.namedEntities = namedEntities;
     }
 
-    public ReviewAnalysisDto(boolean isSarcastic, int sentiment, List<String> namedEntitites) {
+    public ReviewAnalysisDto(boolean isSarcastic, int sentiment, List<String> namedEntitites, Review review) {
         this.isSarcastic = isSarcastic;
         this.sentiment = sentiment;
         this.namedEntities = namedEntitites;
+        this.review = review;
     }
 
     public boolean isSarcastic() {
@@ -35,5 +37,13 @@ public class ReviewAnalysisDto {
 
     public void setSarcastic(boolean sarcastic) {
         isSarcastic = sarcastic;
+    }
+
+    public Review getReview() {
+        return review;
+    }
+
+    public void setReview(Review review) {
+        this.review = review;
     }
 }

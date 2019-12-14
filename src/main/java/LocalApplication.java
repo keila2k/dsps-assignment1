@@ -1,20 +1,25 @@
+import com.google.gson.Gson;
 import dto.MESSAGE_TYPE;
 import dto.MessageDto;
-import com.google.gson.Gson;
+import dto.Review;
+import dto.ReviewAnalysisDto;
+import j2html.tags.ContainerTag;
 import org.apache.commons.lang.math.NumberUtils;
 import org.apache.log4j.BasicConfigurator;
 import org.apache.log4j.Level;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.services.ec2.model.Instance;
+import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.sqs.model.Message;
 import software.amazon.awssdk.services.sqs.model.QueueDoesNotExistException;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
-import java.io.IOException;
+import java.io.*;
+import java.nio.file.Files;
 import java.util.*;
+
+import static j2html.TagCreator.*;
 
 public class LocalApplication {
     public static final String MANAGER_QUEUE = "managerQueue";
@@ -31,11 +36,19 @@ public class LocalApplication {
     static String applicationQueueUrl;
     static List<Instance> instances;
     static Gson gson = new Gson();
+    static Map<Integer, String> sentimentToColor = new HashMap<Integer, String>() {{
+        put(0, "darkred");
+        put(1, "red");
+        put(2, "black");
+        put(3, "lightgreen");
+        put(4, "darkgreen");
+    }};
 
 
     public static void main(String[] args) throws Exception {
         configureLogger();
         extractArgs(args);
+        AWSHandler.s3EstablishConnection();
         handleS3AndUploadInputFiles();
         AWSHandler.sqsEstablishConnection();
         managerQueueUrl = startSqs(MANAGER_QUEUE, false);
@@ -48,7 +61,41 @@ public class LocalApplication {
         sendMessageToSqs(managerQueueUrl, toJson, false);
         waitDoneMessage();
         terminateManagerIfNeeded();
-        downloadFilesFromS3();
+        createOutputFiles();
+    }
+
+    private static void createOutputFiles() {
+        outputFiles.forEach(outputFile -> createOutputFile(outputFile));
+    }
+
+    private static void createOutputFile(String outputFileName) {
+        File htmlTemplate = AWSHandler.getFileFromResources("template.html");
+        String htmlAsString;
+        StringBuilder body = new StringBuilder();
+        try {
+            htmlAsString = new String(Files.readAllBytes(htmlTemplate.toPath()));
+
+            htmlAsString = htmlAsString.replace("$title", outputFileName);
+            ResponseInputStream<GetObjectResponse> inputStream = AWSHandler.s3ReadFile(bucketName, outputFileName);
+            BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
+            String line = reader.readLine();
+            while (line != null) {
+                ReviewAnalysisDto reviewAnalysisDto = gson.fromJson(line, ReviewAnalysisDto.class);
+                ContainerTag p = p();
+                ContainerTag coloredReview = span().withStyle("color: " + sentimentToColor.get(reviewAnalysisDto.getSentiment()));
+                String reviewOutput = gson.toJson(reviewAnalysisDto.getReview(), Review.class);
+                coloredReview.withText(reviewOutput);
+                ContainerTag namedEntities = span().withText(reviewAnalysisDto.getNamedEntities().toString());
+                p.with(coloredReview, namedEntities, br());
+                body.append(p.renderFormatted()).append("\n");
+            }
+            htmlAsString = htmlAsString.replace("$body", body.toString());
+            BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter("./" + outputFileName + ".html"));
+            bufferedWriter.write(htmlAsString);
+            bufferedWriter.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     private static Map<String, String> zipLists(List<String> lhs, List<String> rhs) {
@@ -102,7 +149,6 @@ public class LocalApplication {
     }
 
     private static void handleS3AndUploadInputFiles() {
-        AWSHandler.s3EstablishConnection();
         bucketName = AWSHandler.s3GenerateBucketName("ori-shay");
         AWSHandler.s3CreateBucket(bucketName);
         AWSHandler.s3UploadFiles(bucketName, inputFiles);
@@ -127,7 +173,7 @@ public class LocalApplication {
         args.add("-managerQ " + managerQueueUrl);
         args.add("-bucket " + bucketName);
         args.add("-n " + workersFilesRatio);
-        if(isTerminate) args.add("-t ");
+        if (isTerminate) args.add("-t ");
         instances = AWSHandler.ec2CreateInstance("manager", 1, "Manager.jar", bucketName, args);
     }
 

@@ -185,7 +185,7 @@ public class AWSHandler {
 
     }
 
-    private static File getFileFromResources(String fileName) {
+    public static File getFileFromResources(String fileName) {
 
         ClassLoader classLoader = LocalApplication.class.getClassLoader();
 

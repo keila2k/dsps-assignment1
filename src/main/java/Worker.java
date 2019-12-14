@@ -51,7 +51,7 @@ public class Worker {
         List<String> namedEntities = NamedEntityRecognition.printEntities(review.getText());
         int rating = review.getRating();
         boolean isSarcastic = rating == sentiment + 1;
-        return new ReviewAnalysisDto(isSarcastic, sentiment, namedEntities);
+        return new ReviewAnalysisDto(isSarcastic, sentiment, namedEntities, review);
     }
 
     private static void parseProgramArgs(String[] args, Options options) {

@@ -84,4 +84,16 @@ public class Review {
         this.date = date;
     }
 
+    @Override
+    public String toString() {
+        return "Review{" +
+                "id='" + id + '\'' +
+                ", link='" + link + '\'' +
+                ", title='" + title + '\'' +
+                ", text='" + text + '\'' +
+                ", rating=" + rating +
+                ", author='" + author + '\'' +
+                ", date='" + date + '\'' +
+                '}';
+    }
 }
