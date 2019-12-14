@@ -66,7 +66,7 @@ public class Manager {
         Runnable handleDoneTasksRunnable = new Runnable() {
             @Override
             public void run() {
-                while (!isTerminate && !isFinishedDoneTasks()) handleDoneTasks(); // 3
+                while (!isTerminate || !isFinishedDoneTasks()) handleDoneTasks(); // 3
                 terminateWorkersIfNeeded(); // 4
             }
         };
