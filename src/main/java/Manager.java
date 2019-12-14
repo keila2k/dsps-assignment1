@@ -1,5 +1,6 @@
 import com.google.gson.Gson;
 import dto.*;
+import jdk.nashorn.internal.runtime.PropertyMap;
 import org.apache.commons.cli.*;
 import org.apache.commons.lang.math.NumberUtils;
 import org.apache.log4j.BasicConfigurator;
@@ -7,6 +8,7 @@ import org.apache.log4j.Level;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.core.ResponseInputStream;
+import software.amazon.awssdk.services.ec2.model.Instance;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.sqs.model.Message;
 
@@ -31,6 +33,8 @@ public class Manager {
     static BufferedReader reader;
     private static HashMap<String, FileHandler> inputFileHandlersMap = new HashMap<>();
     private static Map<String, Integer> inputCounterMap = new HashMap<>();
+    private static boolean isTerminate;
+    private static List<Instance> workersList = new ArrayList<>();
 
 
     public static void main(String[] args) {
@@ -46,7 +50,14 @@ public class Manager {
         AWSHandler.ec2EstablishConnection();
         handleInputFiles();
         while (!isFinishedDoneTasks()) handleDoneTasks();
+        terminateWorkersIfNeeded();
         AWSHandler.sendMessageToSqs(applicationQueueUrl, gson.toJson(new MessageDto(MESSAGE_TYPE.DONE, "")), true);
+    }
+
+    private static void terminateWorkersIfNeeded() {
+        if (isTerminate) {
+            workersList.forEach(AWSHandler::terminateEc2Instance);
+        }
     }
 
     private static boolean isFinishedDoneTasks() {
@@ -130,7 +141,8 @@ public class Manager {
         List<String> args = new ArrayList<>();
         args.add("-workersQ " + workersQueueUrl);
         args.add("-doneTasksQ " + doneTasksQueueUrl);
-        AWSHandler.ec2CreateInstance(String.format("worker%d", workerId), 1, "Worker.jar", bucketName, args);
+        List<Instance> instances = AWSHandler.ec2CreateInstance(String.format("worker%d", workerId), 1, "Worker.jar", bucketName, args);
+        workersList.addAll(instances);
     }
 
     private static void incrementSentReviews(String inputFile) {
@@ -180,6 +192,10 @@ public class Manager {
         workersFilesRatioOption.setRequired(true);
         options.addOption(workersFilesRatioOption);
 
+        Option terminate = new Option("t", false, "is terminate on finish");
+        terminate.setRequired(false);
+        options.addOption(terminate);
+
         CommandLineParser parser = new DefaultParser();
         HelpFormatter formatter = new HelpFormatter();
         CommandLine cmd = null;
@@ -197,11 +213,13 @@ public class Manager {
         managerQueueUrl = cmd.getOptionValue("managerQ");
         bucketName = cmd.getOptionValue("bucket");
         workersFilesRatio = NumberUtils.toInt(cmd.getOptionValue("n"));
+        isTerminate = cmd.hasOption("t");
 
         logger.info("appQUrl {}", applicationQueueUrl);
         logger.info("managerQUrl {}", managerQueueUrl);
         logger.info("bucketName {}", bucketName);
         logger.info("workersFilesRatio {}", workersFilesRatio);
+        logger.info("isTerminate {}", isTerminate);
     }
 
     private static void configureLogger() {

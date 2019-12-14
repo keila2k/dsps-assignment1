@@ -127,6 +127,7 @@ public class LocalApplication {
         args.add("-managerQ " + managerQueueUrl);
         args.add("-bucket " + bucketName);
         args.add("-n " + workersFilesRatio);
+        if(isTerminate) args.add("-t ");
         instances = AWSHandler.ec2CreateInstance("manager", 1, "Manager.jar", bucketName, args);
     }
 
