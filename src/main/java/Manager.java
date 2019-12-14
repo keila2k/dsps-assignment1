@@ -173,7 +173,9 @@ public class Manager {
         args.add("-workersQ " + workersQueueUrl);
         args.add("-doneTasksQ " + doneTasksQueueUrl);
         List<Instance> instances = AWSHandler.ec2CreateInstance(String.format("worker%d", workerId), 1, "Worker.jar", bucketName, args);
-        workersList.addAll(instances);
+        boolean isWorkerExists = workersList.stream().anyMatch(worker -> worker.instanceId().equals(instances.get(0).instanceId()));
+        if (!isWorkerExists)
+            workersList.addAll(instances);
     }
 
     private static void incrementSentReviews(String inputFile) {
