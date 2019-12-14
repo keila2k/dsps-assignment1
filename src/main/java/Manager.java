@@ -84,7 +84,7 @@ public class Manager {
     }
 
     private static boolean isFinishedDoneTasks() {
-        return inputFileHandlersMap.values().stream().allMatch(fileHandler -> {
+        return inputFileHandlersMap.values().size() > 0 && inputFileHandlersMap.values().stream().allMatch(fileHandler -> {
             Boolean finishedSendingReview = fileHandler.getFinishedSendingReview();
             int numOfSentReviews = fileHandler.getNumOfSentReviews().get();
             int numOfHandledReviews = fileHandler.getNumOfHandledReviews().get();
