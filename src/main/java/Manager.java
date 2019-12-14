@@ -131,10 +131,10 @@ public class Manager {
     }
 
     private static void handleInputFiles() {
-        int workerId = 0;
-        int counter = 0;
         while (true) {
             for (String inputFile : inputFileHandlersMap.keySet()) {
+                int workerId = 0;
+                int counter = 0;
                 if (inputFileHandlersMap.get(inputFile).getFinishedSendingReview()) {
                     continue;
                 }
