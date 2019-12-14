@@ -7,7 +7,7 @@
 ```
 - Make sure you have AWS credentials configured
 ### How the program works 
-- ####Local Application
+ #### Local Application
     1. Creates a new S3 bucket if needed and uploads the input files
     2. Starts two SQS queues if needed: ManagerQ and ApplicationQ
     3. Creates new Manager Ec2 instance if needed.
@@ -16,7 +16,7 @@
     downloads it from the S3 bucket and creates the HTML output file out of it.
     6. Terminates the Manager if needed
 
-- ####Manager
+ #### Manager
     1. Creates a workers queue and done-tasks queue
     2. Creates 3 tasks which will run on different threads:
         1. Receiving input message which contains the input files to process.
@@ -25,7 +25,7 @@
     4. Whenever all tasks of a given input file are done (received at the done-tasks queue) then a done message is sent to the application-queue.
     3. If needed, waits for the workers to finish and then terminates them
 
-- ####Worker
+ #### Worker
     1. Receives tasks from the manager
     2. Performs sentiment analysis over each task
     3. Send back the result to the Manager using the done-tasks queue.
