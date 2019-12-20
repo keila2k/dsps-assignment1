@@ -29,7 +29,7 @@ public class AWSHandler {
     private static final String SECURITY_GROUP = "launch-wizard-1";
     private static final Logger logger = LoggerFactory.getLogger(AWSHandler.class);
     private static Ec2Client ec2;
-    public static Boolean isBentzi = false;
+    public static Boolean isBentzi = true;
     private static S3Client s3;
     private static Region region = Region.US_EAST_1;
     private static SqsClient sqs;
