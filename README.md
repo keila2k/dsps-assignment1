@@ -2,10 +2,15 @@
 ## Ori Keila & Shay Ben-Simon
 
 ### Running the application
+- In order to run the application by yourself We strongly recommend to fork the project from github and make the necessary changes.
+in order to do so:
+    1. Fork from https://github.com/keila2k/dsps-assignment1.git
+    2. Fill in the right role, security group and key name details in AWSHandler.ec2CreateInstance (commit and push if changed)
+    3. Change the git repository url in AWSHandler.generateExecutionScript
 ```
-   java  -jar yourjar.jar inputFileName1… inputFileNameN outputFileName1… outputFileNameN n <terminate>
+   java  -jar LocalApplication.jar inputFileName1… inputFileNameN outputFileName1… outputFileNameN n <terminate>
 ```
-- Make sure you have AWS credentials configured
+
 ### How the program works 
  #### Local Application
     1. Creates a new S3 bucket if needed and uploads the input files
@@ -31,8 +36,8 @@
     3. Send back the result to the Manager using the done-tasks queue.
     
 ### Technical details
-- ami: 
-- Running time:
+- ami: ami-00068cd7555f543d5 (Manager- T2_SMALL, Worker- T2_LARGE )
+- Running time: 25 minutes
 - The Manager and the Worker are compiled and build over the ec2 machines using git maven. in order to run them manually run ```mvn package```.
 this will create the Worker and the Manager jar files in a target dir. 
 
