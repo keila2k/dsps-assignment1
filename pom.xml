@@ -26,6 +26,25 @@
                 <artifactId>maven-assembly-plugin</artifactId>
                 <executions>
                     <execution>
+                        <id>LocalApplication</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>single</goal>
+                        </goals>
+                        <configuration>
+                            <archive>
+                                <manifest>
+                                    <mainClass>LocalApplication</mainClass>
+                                </manifest>
+                            </archive>
+                            <descriptorRefs>
+                                <descriptorRef>jar-with-dependencies</descriptorRef>
+                            </descriptorRefs>
+                            <finalName>LocalApplication</finalName>
+                            <appendAssemblyId>false</appendAssemblyId>
+                        </configuration>
+                    </execution>
+                    <execution>
                         <id>Manager</id>
                         <phase>package</phase>
                         <goals>
